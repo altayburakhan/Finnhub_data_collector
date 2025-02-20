@@ -46,8 +46,5 @@ repos:
             - types-six
             - types-urllib3
         args: [
-            '--ignore-missing-imports',
-            '--disable-error-code=valid-type',
-            '--disable-error-code=misc',
-            '--disable-error-code=assignment'
+            '--ignore-missing-imports'
         ]
