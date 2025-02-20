@@ -7,6 +7,30 @@ name = "finnhub_data_collector"
 version = "0.1.0"
 description = "Finnhub.io'dan veri toplayan ve görselleştiren uygulama"
 authors = [{name = "Your Name"}]
+requires-python = ">=3.9"
+dependencies = [
+    "websocket-client>=1.6.4",
+    "python-dotenv>=1.0.0",
+    "SQLAlchemy>=2.0.23",
+    "psycopg2-binary>=2.9.9",
+    "streamlit>=1.31.0",
+    "plotly>=5.18.0",
+    "pandas>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pre-commit>=3.5.0",
+    "black>=23.7.0",
+    "flake8>=6.1.0",
+    "isort>=5.12.0",
+    "mypy>=1.4.1",
+]
+
+[tool.setuptools]
+packages = ["src", "src.database", "src.visualization"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

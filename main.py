@@ -1,143 +1,179 @@
-import requests
+"""Finnhub.io'dan veri toplama modülü."""
+
+import json
+import logging
+import os
 import time
 from datetime import datetime
-import logging
-from src.database.postgres_manager import PostgresManager
-from dotenv import load_dotenv
-import os
 from typing import Dict, Optional
-from collections import deque
-from datetime import datetime, timedelta
 
+import websocket
+from dotenv import load_dotenv
+
+from src.database.postgres_manager import PostgresManager
+
+# Sabitler
+RECONNECT_DELAY = 60  # saniye
+MAX_RETRIES = 3
+
+# Log yapılandırması
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# .env dosyasını yükle
 load_dotenv()
 
-class RateLimiter:
-    def __init__(self, max_requests: int, time_window: int):
-        """
-        Args:
-            max_requests (int): Maksimum istek sayısı
-            time_window (int): Zaman penceresi (saniye)
-        """
-        self.max_requests = max_requests
-        self.time_window = time_window
-        self.requests = deque()
 
-    def wait_if_needed(self):
-        """Rate limit kontrolü yap ve gerekirse bekle"""
-        now = datetime.now()
-        
-        # Eski istekleri temizle
-        while self.requests and self.requests[0] < now - timedelta(seconds=self.time_window):
-            self.requests.popleft()
-        
-        # Eğer limit doluysa bekle
-        if len(self.requests) >= self.max_requests:
-            wait_time = (self.requests[0] + timedelta(seconds=self.time_window) - now).total_seconds()
-            if wait_time > 0:
-                logger.debug(f"Rate limit nedeniyle {wait_time:.2f} saniye bekleniyor")
-                time.sleep(wait_time)
-        
-        # Yeni isteği kaydet
-        self.requests.append(now)
+class FinnhubWebSocket:
+    """Finnhub WebSocket bağlantısını yöneten sınıf."""
 
-class FinnhubAPI:
-    def __init__(self):
+    def __init__(self) -> None:
+        """WebSocket bağlantısını başlat."""
         self.api_key = os.getenv('FINNHUB_API_KEY')
         if not self.api_key:
             raise ValueError("FINNHUB_API_KEY bulunamadı!")
-            
-        self.base_url = "https://finnhub.io/api/v1"
-        # Daha fazla sembol ekleyelim
+
         self.symbols = [
             'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META',
-            'TSLA', 'NVDA', 'AMD', 'INTC', 'NFLX',
-            'PYPL', 'ADBE', 'CSCO', 'CMCSA', 'PEP',
-            'AVGO', 'TXN', 'QCOM', 'INTU', 'AMAT'
+            'TSLA', 'NVDA', 'AMD', 'INTC', 'NFLX'
         ]
         self.db_manager = PostgresManager()
-        # 60 saniye içinde 20 istek için rate limiter
-        self.rate_limiter = RateLimiter(max_requests=20, time_window=60)
+        self.ws = None
+        self.retry_count = 0
+        self.last_connection_time = 0
+        self.connect()
 
-    def get_quote(self, symbol: str) -> Dict:
+    def should_reconnect(self) -> bool:
         """
-        Bir sembol için anlık fiyat verisi al
-        
-        Args:
-            symbol: Hisse senedi sembolü
-            
+        Yeniden bağlanma kontrolü.
+
         Returns:
-            Dict: Fiyat verisi
+            bool: Yeniden bağlanılmalı mı
         """
-        self.rate_limiter.wait_if_needed()
-        
-        endpoint = f"{self.base_url}/quote"
-        params = {
-            'symbol': symbol,
-            'token': self.api_key
-        }
-        
-        response = requests.get(endpoint, params=params)
-        response.raise_for_status()  # HTTP hataları için
-        return response.json()
+        now = time.time()
+        if now - self.last_connection_time < RECONNECT_DELAY:
+            return False
+        return self.retry_count < MAX_RETRIES
 
-    def collect_data(self) -> None:
-        """Tüm semboller için veri topla"""
-        logger.info("Veri toplama başladı")
-        success_count = 0
-        
-        for symbol in self.symbols:
-            try:
-                data = self.get_quote(symbol)
-                
-                if data.get('c') is None:  # 'c' current price'ı temsil eder
-                    logger.warning(f"Geçersiz veri alındı ({symbol}): {data}")
-                    continue
-                    
-                stock_data = {
-                    'symbol': symbol,
-                    'price': float(data['c']),  # Current price
-                    'volume': float(data.get('t', 0)),  # Timestamp'i volume olarak kullan
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'collected_at': datetime.now().isoformat()
-                }
-                
-                result = self.db_manager.insert_stock_data(stock_data)
-                if result:
-                    success_count += 1
-                    logger.info(f"Veri kaydedildi: {symbol} - ${stock_data['price']:.2f} (ID: {result.id})")
-                else:
-                    logger.error(f"Veri kaydedilemedi: {stock_data}")
-                    
-            except requests.exceptions.RequestException as e:
-                logger.error(f"HTTP isteği hatası ({symbol}): {e}", exc_info=True)
-            except Exception as e:
-                logger.error(f"Beklenmeyen hata ({symbol}): {e}", exc_info=True)
-                logger.debug(f"Hata oluşturan veri: {data}")  # Debug için veriyi logla
-        
-        logger.info(f"Veri toplama tamamlandı. Başarılı: {success_count}/{len(self.symbols)}")
-
-def main():
-    api = FinnhubAPI()
-    
-    while True:
-        try:
-            start_time = time.time()
-            api.collect_data()
+    def connect(self) -> None:
+        """WebSocket bağlantısını oluştur."""
+        if not self.should_reconnect():
+            logger.warning(
+                f"Rate limit nedeniyle {RECONNECT_DELAY} saniye bekleniyor..."
+            )
+            time.sleep(RECONNECT_DELAY)
+            self.retry_count = 0
             
-            # 3 saniye bekle (dakikada 20 istek için)
-            elapsed = time.time() - start_time
-            if elapsed < 3:  # Her 3 saniyede bir çalıştır
-                time.sleep(3 - elapsed)
-                
+        self.last_connection_time = time.time()
+        self.retry_count += 1
+        
+        websocket.enableTrace(True)
+        self.ws = websocket.WebSocketApp(
+            f"wss://ws.finnhub.io?token={self.api_key}",
+            on_message=self.on_message,
+            on_error=self.on_error,
+            on_close=self.on_close,
+            on_open=self.on_open
+        )
+
+    def on_message(self, ws: websocket.WebSocketApp, message: str) -> None:
+        """
+        WebSocket mesajını işle.
+
+        Args:
+            ws: WebSocket bağlantısı
+            message: Gelen mesaj
+        """
+        try:
+            data = json.loads(message)
+            if data['type'] == 'trade':
+                for trade in data['data']:
+                    stock_data = {
+                        'symbol': trade['s'],
+                        'price': float(trade['p']),
+                        'volume': float(trade['v']),
+                        'timestamp': datetime.fromtimestamp(
+                            trade['t'] / 1000
+                        ).strftime('%Y-%m-%d %H:%M:%S'),
+                        'collected_at': datetime.now().isoformat()
+                    }
+                    
+                    result = self.db_manager.insert_stock_data(stock_data)
+                    if result:
+                        logger.info(
+                            f"Veri kaydedildi: {stock_data['symbol']} - "
+                            f"${stock_data['price']:.2f}"
+                        )
+
         except Exception as e:
-            logger.error(f"Ana döngü hatası: {e}", exc_info=True)
-            time.sleep(5)
+            logger.error(f"Mesaj işleme hatası: {str(e)}")
+
+    def on_error(self, ws: websocket.WebSocketApp, error: str) -> None:
+        """
+        WebSocket hatasını işle.
+
+        Args:
+            ws: WebSocket bağlantısı
+            error: Hata mesajı
+        """
+        if "429" in str(error):  # Rate limit hatası
+            logger.warning("Rate limit aşıldı, bekleniyor...")
+            time.sleep(RECONNECT_DELAY)
+        else:
+            logger.error(f"WebSocket hatası: {str(error)}")
+
+    def on_close(self, ws: websocket.WebSocketApp, 
+                close_status_code: int, close_msg: str) -> None:
+        """
+        WebSocket bağlantısı kapandığında çalışır.
+
+        Args:
+            ws: WebSocket bağlantısı
+            close_status_code: Kapanma durum kodu
+            close_msg: Kapanma mesajı
+        """
+        logger.warning("WebSocket bağlantısı kapandı")
+        if self.should_reconnect():
+            self.connect()
+            self.ws.run_forever()
+        else:
+            logger.error("Maksimum yeniden bağlanma denemesi aşıldı")
+
+    def on_open(self, ws: websocket.WebSocketApp) -> None:
+        """
+        WebSocket bağlantısı açıldığında çalışır.
+
+        Args:
+            ws: WebSocket bağlantısı
+        """
+        logger.info("WebSocket bağlantısı açıldı")
+        # Sembollere sırayla abone ol
+        for symbol in self.symbols:
+            ws.send(json.dumps({'type': 'subscribe', 'symbol': symbol}))
+            logger.info(f"{symbol} için abonelik başlatıldı")
+            time.sleep(1)  # Rate limit'i aşmamak için bekle
+
+    def run(self) -> None:
+        """WebSocket bağlantısını başlat."""
+        while True:
+            try:
+                self.ws.run_forever()
+                if not self.should_reconnect():
+                    logger.error("Bağlantı kurulamıyor, uygulama durduruluyor")
+                    break
+            except Exception as e:
+                logger.error(f"WebSocket çalıştırma hatası: {str(e)}")
+                time.sleep(1)
+
+
+def main() -> None:
+    """Ana uygulama fonksiyonu."""
+    ws_client = FinnhubWebSocket()
+    ws_client.run()
+
 
 if __name__ == "__main__":
     main()

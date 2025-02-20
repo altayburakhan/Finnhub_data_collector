@@ -1,40 +1,57 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker  # declarative_base'i buradan import et
+"""PostgreSQL veritabanı yönetimi için modül."""
+
 from datetime import datetime
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+
+from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-Base = declarative_base()  # Yeni import ile kullan
+Base = declarative_base()
+
 
 class StockData(Base):
+    """Hisse senedi verilerini tutan veritabanı modeli."""
+
     __tablename__ = 'stock_data'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)  # autoincrement ekleyelim
-    symbol = Column(String(10), nullable=False, index=True)     # index ekleyelim
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(10), nullable=False, index=True)
     price = Column(Float, nullable=False)
     volume = Column(Float)
-    timestamp = Column(DateTime, nullable=False, index=True)    # index ekleyelim
+    timestamp = Column(DateTime, nullable=False, index=True)
     collected_at = Column(DateTime, nullable=False)
 
-    def __repr__(self):
-        return f"<StockData(symbol='{self.symbol}', price={self.price}, timestamp='{self.timestamp}')>"
+    def __repr__(self) -> str:
+        """Model string temsili."""
+        return (
+            f"<StockData(symbol='{self.symbol}', "
+            f"price={self.price}, "
+            f"timestamp='{self.timestamp}')>"
+        )
+
 
 class PostgresManager:
-    def __init__(self):
-        """PostgreSQL bağlantısını başlat"""
+    """PostgreSQL veritabanı işlemlerini yöneten sınıf."""
+
+    def __init__(self) -> None:
+        """PostgreSQL bağlantısını başlat."""
         self.engine = None
         self.Session = None
         self.setup_connection()
 
-    def setup_connection(self):
-        """Veritabanı bağlantısını yapılandır"""
+    def setup_connection(self) -> None:
+        """Veritabanı bağlantısını yapılandır."""
         try:
             db_url = (
-                f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@"
-                f"{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
+                f"postgresql://{os.getenv('POSTGRES_USER')}:"
+                f"{os.getenv('POSTGRES_PASSWORD')}@"
+                f"{os.getenv('POSTGRES_HOST')}:"
+                f"{os.getenv('POSTGRES_PORT')}/"
+                f"{os.getenv('POSTGRES_DB')}"
             )
             self.engine = create_engine(db_url)
             Base.metadata.create_all(self.engine)
@@ -46,32 +63,42 @@ class PostgresManager:
 
     def insert_stock_data(self, data: Dict) -> Optional[StockData]:
         """
-        Hisse senedi verisini veritabanına ekle
-        
+        Hisse senedi verisini veritabanına ekle.
+
         Args:
-            data: Eklenecek veri dictionary'si
-            
+            data: Eklenecek veri sözlüğü.
+                Gerekli alanlar:
+                - symbol: str
+                - price: float
+                - volume: float
+                - timestamp: str ('%Y-%m-%d %H:%M:%S' formatında)
+                - collected_at: str (ISO format)
+
         Returns:
-            Eklenen StockData objesi veya None
+            Optional[StockData]: Eklenen veri objesi veya None
         """
+        session = self.Session()
         try:
-            session = self.Session()
-            
             stock_data = StockData(
                 symbol=data['symbol'],
                 price=data['price'],
                 volume=data['volume'],
-                timestamp=datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S'),
+                timestamp=datetime.strptime(
+                    data['timestamp'],
+                    '%Y-%m-%d %H:%M:%S'
+                ),
                 collected_at=datetime.fromisoformat(data['collected_at'])
             )
-            
+
             session.add(stock_data)
             session.commit()
-            
-            # ID'yi loglayalım
-            logger.info(f"Veri başarıyla kaydedildi: {data['symbol']}, ID: {stock_data.id}")
+
+            logger.info(
+                f"Veri başarıyla kaydedildi: {data['symbol']}, "
+                f"ID: {stock_data.id}"
+            )
             return stock_data
-            
+
         except Exception as e:
             logger.error(f"Veri kaydetme hatası: {e}")
             session.rollback()
@@ -79,21 +106,21 @@ class PostgresManager:
         finally:
             session.close()
 
-    def get_latest_records(self, limit: int = 5) -> list:
+    def get_latest_records(self, limit: int = 5) -> List[StockData]:
         """
-        En son kayıtları getir
-        
+        En son kayıtları getir.
+
         Args:
             limit: Kaç kayıt getirileceği
-            
+
         Returns:
-            StockData listesi
+            List[StockData]: StockData nesnelerinin listesi
         """
         session = self.Session()
         try:
-            records = session.query(StockData)\
-                .order_by(StockData.collected_at.desc())\
-                .limit(limit)\
+            records = session.query(StockData) \
+                .order_by(StockData.collected_at.desc(), StockData.price.desc()) \
+                .limit(limit) \
                 .all()
             return records
         finally:

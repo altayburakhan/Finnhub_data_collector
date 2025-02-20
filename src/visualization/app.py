@@ -1,157 +1,229 @@
-import streamlit as st
-import pandas as pd
-from sqlalchemy import create_engine
-import os
-from dotenv import load_dotenv
-import plotly.graph_objects as go
+"""Streamlit ile veri görselleştirme uygulaması."""
+
 from datetime import datetime, timedelta
-import plotly.express as px
+import logging
+import os
+import time
 from typing import Dict, List, Optional
+
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
+
+# Sabitler
+CACHE_TTL = 3  # saniye
+REFRESH_INTERVAL = 3  # saniye
+DEFAULT_HOURS = 1
+MAX_HOURS = 24
+
+# Log yapılandırması
+logger = logging.getLogger(__name__)
 
 # .env dosyasını yükle
 load_dotenv()
 
-def get_db_connection() -> create_engine:
-    """Veritabanı bağlantısı oluştur"""
-    db_url = (
-        f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@"
-        f"{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
-    )
-    return create_engine(db_url)
 
-def load_data(engine: create_engine, hours: int = 1) -> pd.DataFrame:
-    """
-    Veritabanından veri yükle
-    
-    Args:
-        engine: SQLAlchemy engine
-        hours: Kaç saatlik veri çekileceği
+@st.cache_resource
+def get_db_connection() -> Optional[Engine]:
+    """Veritabanı bağlantısı oluştur."""
+    try:
+        db_url = (
+            f"postgresql://{os.getenv('POSTGRES_USER')}:"
+            f"{os.getenv('POSTGRES_PASSWORD')}@"
+            f"{os.getenv('POSTGRES_HOST')}:"
+            f"{os.getenv('POSTGRES_PORT')}/"
+            f"{os.getenv('POSTGRES_DB')}"
+        )
+        return create_engine(db_url)
+    except Exception as e:
+        st.error(f"Veritabanı bağlantı hatası: {str(e)}")
+        return None
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
+    """Son n saatlik veriyi yükle."""
+    try:
+        cutoff_time = datetime.now() - timedelta(hours=hours)
         
-    Returns:
-        DataFrame: Yüklenen veriler
-    """
-    query = f"""
-    SELECT symbol, price, volume, timestamp, collected_at 
-    FROM stock_data 
-    WHERE collected_at > NOW() - INTERVAL '{hours} hours'
-    ORDER BY collected_at DESC
-    """
-    return pd.read_sql(query, engine)
+        query = """
+        SELECT 
+            symbol,
+            price,
+            volume,
+            timestamp,
+            collected_at,
+            AVG(price) OVER (
+                PARTITION BY symbol 
+                ORDER BY collected_at 
+                RANGE BETWEEN INTERVAL '5 minutes' PRECEDING AND CURRENT ROW
+            ) as price_ma_5
+        FROM stock_data 
+        WHERE collected_at > %(cutoff)s
+        ORDER BY collected_at DESC
+        """
+        
+        return pd.read_sql_query(
+            query, 
+            _engine,
+            params={'cutoff': cutoff_time},
+            parse_dates=['timestamp', 'collected_at']
+        )
+    except Exception as e:
+        st.error(f"Veri yükleme hatası: {str(e)}")
+        return pd.DataFrame()
 
-def create_price_chart(data: pd.DataFrame, symbol: str) -> go.Figure:
+
+def create_metrics(symbol_data: pd.DataFrame) -> None:
     """
-    Fiyat grafiği oluştur
-    
+    İstatistik metriklerini göster.
+
     Args:
-        data: Veri DataFrame'i
+        symbol_data: Seçili sembol için veriler
+    """
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            "Son Fiyat",
+            f"${symbol_data['price'].iloc[0]:.2f}",
+            f"{(symbol_data['price'].iloc[0] - symbol_data['price'].iloc[-1]):.2f}"
+        )
+    with col2:
+        st.metric(
+            "Ortalama Fiyat",
+            f"${symbol_data['price'].mean():.2f}"
+        )
+    with col3:
+        st.metric(
+            "İşlem Hacmi",
+            f"{symbol_data['volume'].iloc[0]:,.0f}"
+        )
+
+
+def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
+    """
+    Fiyat grafiğini oluştur.
+
+    Args:
+        symbol_data: Seçili sembol için veriler
         symbol: Hisse senedi sembolü
-        
-    Returns:
-        Figure: Plotly grafik objesi
     """
-    symbol_data = data[data['symbol'] == symbol].copy()
     fig = go.Figure()
-    
     fig.add_trace(go.Scatter(
         x=symbol_data['collected_at'],
         y=symbol_data['price'],
-        mode='lines+markers',
+        mode='lines',
         name='Fiyat',
-        line=dict(color='#2ecc71', width=2),
-        marker=dict(size=6)
+        line=dict(color='#2ecc71', width=2)
     ))
-    
+    fig.add_trace(go.Scatter(
+        x=symbol_data['collected_at'],
+        y=symbol_data['price_ma_5'],
+        mode='lines',
+        name='5dk MA',
+        line=dict(color='#3498db', width=1, dash='dash')
+    ))
     fig.update_layout(
         title=f"{symbol} Fiyat Grafiği",
         xaxis_title="Zaman",
         yaxis_title="Fiyat ($)",
         template="plotly_dark",
-        hovermode='x unified'
+        height=500
     )
-    return fig
+    st.plotly_chart(fig, use_container_width=True)
 
-def show_statistics(data: pd.DataFrame, symbol: str) -> None:
-    """İstatistikleri göster"""
-    symbol_data = data[data['symbol'] == symbol]
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        current_price = symbol_data['price'].iloc[0]
-        st.metric("Güncel Fiyat", f"${current_price:.2f}")
-        
-    with col2:
-        avg_price = symbol_data['price'].mean()
-        st.metric("Ortalama", f"${avg_price:.2f}")
-        
-    with col3:
-        min_price = symbol_data['price'].min()
-        st.metric("En Düşük", f"${min_price:.2f}")
-        
-    with col4:
-        max_price = symbol_data['price'].max()
-        st.metric("En Yüksek", f"${max_price:.2f}")
 
 def main():
+    """Ana uygulama fonksiyonu."""
     st.set_page_config(
         page_title="Hisse Senedi Takip",
         page_icon="📈",
         layout="wide"
     )
     
-    st.title("📈 Hisse Senedi Takip Paneli")
-    
-    try:
-        # Veritabanı bağlantısı
-        engine = get_db_connection()
-        
-        # Zaman aralığı seçimi
-        hours = st.sidebar.slider(
+    # Veritabanı bağlantısı
+    engine = get_db_connection()
+    if not engine:
+        st.error("Veritabanına bağlanılamadı!")
+        return
+
+    # Ana başlık
+    st.title("📊 Hisse Senedi Takip Paneli")
+
+    # Sidebar kontrolleri
+    with st.sidebar:
+        hours = st.slider(
             "Veri Aralığı (Saat)",
-            min_value=1,
-            max_value=24,
-            value=1
+            1,
+            MAX_HOURS,
+            DEFAULT_HOURS,
+            key="time_slider"
         )
-        
-        # Verileri yükle
-        df = load_data(engine, hours)
-        
-        if df.empty:
-            st.warning("Henüz veri bulunmamaktadır.")
-            return
+
+    # İlk veriyi yükle
+    df = load_data(engine, hours)
+    if df.empty:
+        st.warning("Veri bulunamadı!")
+        return
+
+    # Sembol seçimi - döngü dışında
+    symbols = sorted(df['symbol'].unique())
+    symbol_container = st.sidebar.empty()
+    selected_symbol = symbol_container.selectbox(
+        "Hisse Senedi",
+        symbols,
+        key="symbol_select"
+    )
+
+    # Veri yükleme ve güncelleme döngüsü
+    placeholder = st.empty()
+    while True:
+        try:
+            # Son güncelleme zamanı
+            st.sidebar.text(
+                f"Son güncelleme: {datetime.now().strftime('%H:%M:%S')}"
+            )
             
-        # Sembol seçimi
-        symbols = sorted(df['symbol'].unique())
-        selected_symbol = st.sidebar.selectbox("Hisse Senedi", symbols)
-        
-        # İstatistikler
-        st.subheader("📊 İstatistikler")
-        show_statistics(df, selected_symbol)
-        
-        # Fiyat grafiği
-        st.subheader("💹 Fiyat Grafiği")
-        fig = create_price_chart(df, selected_symbol)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Son işlemler tablosu
-        st.subheader("📝 Son İşlemler")
-        recent_data = df[df['symbol'] == selected_symbol].head(10)
-        st.dataframe(
-            recent_data[['collected_at', 'price', 'volume']]
-            .rename(columns={
-                'collected_at': 'Zaman',
-                'price': 'Fiyat',
-                'volume': 'Hacim'
-            })
-        )
-        
-        # Auto-refresh
-        st.sidebar.write("---")
-        if st.sidebar.checkbox("Otomatik Yenile", value=True):
-            st.experimental_rerun()
+            # Veri yükleme
+            df = load_data(engine, hours)
             
-    except Exception as e:
-        st.error(f"Bir hata oluştu: {str(e)}")
+            if df.empty:
+                placeholder.warning("Veri bulunamadı!")
+                time.sleep(REFRESH_INTERVAL)
+                continue
+            
+            # Ana içerik
+            with placeholder.container():
+                # Seçilen sembol için veri
+                symbol_data = df[df['symbol'] == selected_symbol]
+                
+                # İstatistikler
+                create_metrics(symbol_data)
+                
+                # Grafik
+                create_chart(symbol_data, selected_symbol)
+                
+                # Tablo
+                st.dataframe(
+                    symbol_data[['collected_at', 'price', 'volume']]
+                    .rename(columns={
+                        'collected_at': 'Zaman',
+                        'price': 'Fiyat',
+                        'volume': 'Hacim'
+                    })
+                    .head(10)
+                )
+            
+            # Yenileme aralığı
+            time.sleep(REFRESH_INTERVAL)
+            
+        except Exception as e:
+            st.error(f"Bir hata oluştu: {str(e)}")
+            time.sleep(REFRESH_INTERVAL)
+
 
 if __name__ == "__main__":
     main()

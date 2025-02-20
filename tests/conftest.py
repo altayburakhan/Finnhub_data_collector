@@ -1,64 +1,156 @@
+"""Test fixture'ları için yapılandırma modülü."""
+
 import os
-import sys
+from datetime import datetime
+from typing import Dict, Generator, List
+
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
-# Proje kök dizinini Python path'ine ekle
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(project_root)
+from src.database.postgres_manager import Base, PostgresManager, StockData
 
-from src.database.postgres_manager import Base, PostgresManager
-
+# Test veritabanı yapılandırması için .env dosyasını yükle
 load_dotenv()
 
+
 @pytest.fixture(scope="session")
-def test_db_url():
-    """Test veritabanı URL'si"""
+def db_url() -> str:
+    """
+    Test veritabanı URL'sini oluştur.
+
+    Returns:
+        str: Veritabanı bağlantı URL'si
+    """
     return (
-        f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@"
-        f"{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/test_finnhub_db"
+        f"postgresql://{os.getenv('POSTGRES_USER')}:"
+        f"{os.getenv('POSTGRES_PASSWORD')}@"
+        f"{os.getenv('POSTGRES_HOST')}:"
+        f"{os.getenv('POSTGRES_PORT')}/"
+        f"{os.getenv('POSTGRES_DB')}_test"  # Test için ayrı veritabanı
     )
 
+
 @pytest.fixture(scope="session")
-def test_engine(test_db_url):
-    """Test veritabanı engine'i"""
-    engine = create_engine(test_db_url)
-    
-    # Mevcut bağlantıları kapat ve tabloyu yeniden oluştur
-    Base.metadata.drop_all(engine)
+def engine(db_url: str) -> Engine:
+    """
+    Test veritabanı engine'ini oluştur.
+
+    Args:
+        db_url: Veritabanı bağlantı URL'si
+
+    Returns:
+        Engine: SQLAlchemy engine objesi
+    """
+    return create_engine(db_url)
+
+
+@pytest.fixture(scope="session")
+def tables(engine: Engine) -> Generator[None, None, None]:
+    """
+    Test tablolarını oluştur ve test sonunda temizle.
+
+    Args:
+        engine: SQLAlchemy engine objesi
+
+    Yields:
+        None: Bir değer döndürmez
+    """
     Base.metadata.create_all(engine)
-    
-    yield engine
-    
-    # Testler bitince tabloları temizle
+    yield
     Base.metadata.drop_all(engine)
 
-@pytest.fixture
-def test_session(test_engine):
-    """Test session'ı"""
-    Session = sessionmaker(bind=test_engine)
-    session = Session()
-    yield session
-    session.rollback()
-    session.close()
 
 @pytest.fixture
-def db_manager(test_engine):
-    """Test için PostgresManager instance'ı"""
+def db_session(
+    engine: Engine, tables: None
+) -> Generator[Session, None, None]:
+    """
+    Test için veritabanı oturumu oluştur.
+
+    Args:
+        engine: SQLAlchemy engine objesi
+        tables: Test tabloları (fixture)
+
+    Yields:
+        Session: SQLAlchemy session objesi
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection)
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture
+def db_manager(engine: Engine, tables: None) -> PostgresManager:
+    """
+    Test için PostgresManager instance'ı oluştur.
+
+    Args:
+        engine: SQLAlchemy engine objesi
+        tables: Test tabloları (fixture)
+
+    Returns:
+        PostgresManager: Veritabanı yönetici sınıfı instance'ı
+    """
     manager = PostgresManager()
-    manager.engine = test_engine
-    manager.Session = sessionmaker(bind=test_engine)
+    manager.engine = engine
+    manager.Session = sessionmaker(bind=engine)
     return manager
 
+
 @pytest.fixture
-def sample_stock_data():
-    """Örnek hisse senedi verisi"""
+def sample_stock_data() -> Dict:
+    """
+    Örnek hisse senedi verisi oluştur.
+
+    Returns:
+        Dict: Test için örnek veri
+    """
     return {
-        'symbol': 'TEST',
-        'price': 100.0,
-        'volume': 1000,
+        'symbol': 'AAPL',
+        'price': 150.0,
+        'volume': 1000000.0,
         'timestamp': '2024-02-20 12:00:00',
-        'collected_at': '2024-02-20T12:00:00'
+        'collected_at': datetime.now().isoformat()
     }
+
+
+@pytest.fixture
+def multiple_stock_data() -> List[Dict]:
+    """
+    Birden fazla örnek hisse senedi verisi oluştur.
+
+    Returns:
+        List[Dict]: Test için örnek veri listesi
+    """
+    base_time = datetime(2024, 2, 20, 12, 0, 0)
+    return [
+        {
+            'symbol': symbol,
+            'price': 100.0 + i,
+            'volume': 1000000.0 + (i * 1000),
+            'timestamp': (base_time).strftime('%Y-%m-%d %H:%M:%S'),
+            'collected_at': (base_time).isoformat()
+        }
+        for i, symbol in enumerate(['AAPL', 'MSFT', 'GOOGL'])
+    ]
+
+
+@pytest.fixture
+def clean_db(db_session: Session) -> None:
+    """
+    Test veritabanını temizle.
+
+    Args:
+        db_session: SQLAlchemy session objesi
+    """
+    db_session.query(StockData).delete()
+    db_session.commit()
