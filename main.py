@@ -5,21 +5,27 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Union, cast
 
-import websocket
+import websocket  # type: ignore
 from dotenv import load_dotenv
 
 from src.database.postgres_manager import PostgresManager
 
 # Sabitler
-RECONNECT_DELAY = 60  # saniye
-MAX_RETRIES = 3
+RECONNECT_DELAY: int = 60  # saniye
+MAX_RETRIES: int = 3
+MAX_REQUESTS_PER_MINUTE: int = 20
+
+# Custom types
+TradeData = Dict[str, Union[str, float, int]]
+WebSocketMessage = Dict[str, Union[str, List[TradeData]]]
+StockDataDict = Dict[str, Union[str, float, datetime]]
 
 # Log yapılandırması
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format=("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
 )
 logger = logging.getLogger(__name__)
 
@@ -32,18 +38,26 @@ class FinnhubWebSocket:
 
     def __init__(self) -> None:
         """WebSocket bağlantısını başlat."""
-        self.api_key = os.getenv('FINNHUB_API_KEY')
+        self.api_key: Optional[str] = os.getenv("FINNHUB_API_KEY")
         if not self.api_key:
             raise ValueError("FINNHUB_API_KEY bulunamadı!")
 
-        self.symbols = [
-            'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META',
-            'TSLA', 'NVDA', 'AMD', 'INTC', 'NFLX'
+        self.symbols: List[str] = [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "GOOGL",
+            "META",
+            "TSLA",
+            "NVDA",
+            "AMD",
+            "INTC",
+            "NFLX",
         ]
-        self.db_manager = PostgresManager()
-        self.ws = None
-        self.retry_count = 0
-        self.last_connection_time = 0
+        self.db_manager: PostgresManager = PostgresManager()
+        self.ws: Optional[websocket.WebSocketApp] = None
+        self.retry_count: int = 0
+        self.last_connection_time: float = 0
         self.connect()
 
     def should_reconnect(self) -> bool:
@@ -53,7 +67,7 @@ class FinnhubWebSocket:
         Returns:
             bool: Yeniden bağlanılmalı mı
         """
-        now = time.time()
+        now: float = time.time()
         if now - self.last_connection_time < RECONNECT_DELAY:
             return False
         return self.retry_count < MAX_RETRIES
@@ -66,50 +80,53 @@ class FinnhubWebSocket:
             )
             time.sleep(RECONNECT_DELAY)
             self.retry_count = 0
-            
+
         self.last_connection_time = time.time()
         self.retry_count += 1
-        
+
         websocket.enableTrace(True)
         self.ws = websocket.WebSocketApp(
             f"wss://ws.finnhub.io?token={self.api_key}",
             on_message=self.on_message,
             on_error=self.on_error,
             on_close=self.on_close,
-            on_open=self.on_open
+            on_open=self.on_open,
         )
 
     def on_message(self, ws: websocket.WebSocketApp, message: str) -> None:
         """
-        WebSocket mesajını işle.
+        Processes WebSocket message.
 
         Args:
-            ws: WebSocket bağlantısı
-            message: Gelen mesaj
+            ws: WebSocket connection
+            message: Incoming message
         """
         try:
-            data = json.loads(message)
-            if data['type'] == 'trade':
-                for trade in data['data']:
-                    stock_data = {
-                        'symbol': trade['s'],
-                        'price': float(trade['p']),
-                        'volume': float(trade['v']),
-                        'timestamp': datetime.fromtimestamp(
-                            trade['t'] / 1000
-                        ).strftime('%Y-%m-%d %H:%M:%S'),
-                        'collected_at': datetime.now().isoformat()
+            data: WebSocketMessage = json.loads(message)
+            if data["type"] == "trade":
+                trades = cast(List[Dict[str, Union[str, float, int]]], data["data"])
+                for trade in trades:
+                    symbol = str(trade["s"])
+                    price = float(trade["p"])
+                    volume = float(trade["v"])
+                    timestamp = datetime.fromtimestamp(int(trade["t"]) / 1000).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+
+                    stock_data: StockDataDict = {
+                        "symbol": symbol,
+                        "price": price,
+                        "volume": volume,
+                        "timestamp": timestamp,
+                        "collected_at": datetime.now().isoformat(),
                     }
-                    
+
                     result = self.db_manager.insert_stock_data(stock_data)
                     if result:
-                        logger.info(
-                            f"Veri kaydedildi: {stock_data['symbol']} - "
-                            f"${stock_data['price']:.2f}"
-                        )
+                        logger.info(f"Data saved: {symbol} - ${price:.2f}")
 
         except Exception as e:
-            logger.error(f"Mesaj işleme hatası: {str(e)}")
+            logger.error(f"Message processing error: {str(e)}")
 
     def on_error(self, ws: websocket.WebSocketApp, error: str) -> None:
         """
@@ -125,8 +142,12 @@ class FinnhubWebSocket:
         else:
             logger.error(f"WebSocket hatası: {str(error)}")
 
-    def on_close(self, ws: websocket.WebSocketApp, 
-                close_status_code: int, close_msg: str) -> None:
+    def on_close(
+        self,
+        ws: websocket.WebSocketApp,
+        close_status_code: Optional[int],
+        close_msg: Optional[str],
+    ) -> None:
         """
         WebSocket bağlantısı kapandığında çalışır.
 
@@ -138,7 +159,8 @@ class FinnhubWebSocket:
         logger.warning("WebSocket bağlantısı kapandı")
         if self.should_reconnect():
             self.connect()
-            self.ws.run_forever()
+            if self.ws:
+                self.ws.run_forever()
         else:
             logger.error("Maksimum yeniden bağlanma denemesi aşıldı")
 
@@ -152,7 +174,7 @@ class FinnhubWebSocket:
         logger.info("WebSocket bağlantısı açıldı")
         # Sembollere sırayla abone ol
         for symbol in self.symbols:
-            ws.send(json.dumps({'type': 'subscribe', 'symbol': symbol}))
+            ws.send(json.dumps({"type": "subscribe", "symbol": symbol}))
             logger.info(f"{symbol} için abonelik başlatıldı")
             time.sleep(1)  # Rate limit'i aşmamak için bekle
 
@@ -160,7 +182,8 @@ class FinnhubWebSocket:
         """WebSocket bağlantısını başlat."""
         while True:
             try:
-                self.ws.run_forever()
+                if self.ws:
+                    self.ws.run_forever()
                 if not self.should_reconnect():
                     logger.error("Bağlantı kurulamıyor, uygulama durduruluyor")
                     break
