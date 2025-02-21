@@ -29,11 +29,10 @@ def db_url() -> str:
         f"{os.getenv('POSTGRES_PASSWORD')}@"
         f"{os.getenv('POSTGRES_HOST')}:"
         f"{os.getenv('POSTGRES_PORT')}/"
-        f"{os.getenv('POSTGRES_DB')}"  # _test removed
+        f"{os.getenv('POSTGRES_DB')}"
     )
 
 
-# engine creates test database engine
 @pytest.fixture(scope="session")
 def engine(db_url: str) -> Engine:
     """
@@ -48,7 +47,6 @@ def engine(db_url: str) -> Engine:
     return create_engine(db_url)
 
 
-# tables creates test tables
 @pytest.fixture(scope="session")
 def tables(engine: Engine) -> Generator[None, None, None]:
     """
@@ -65,7 +63,6 @@ def tables(engine: Engine) -> Generator[None, None, None]:
     Base.metadata.drop_all(engine)
 
 
-# db_session creates a database session for testing
 @pytest.fixture
 def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     """
@@ -89,9 +86,6 @@ def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     connection.close()
 
 
-# db_manager creates a PostgresManager instance for testing
-
-
 @pytest.fixture
 def db_manager(engine: Engine, tables: None) -> PostgresManager:
     """
@@ -110,9 +104,6 @@ def db_manager(engine: Engine, tables: None) -> PostgresManager:
     return manager
 
 
-# sample_stock_data creates sample data for testing like symbol, price, volume, timestamp, collected_at
-
-
 @pytest.fixture
 def sample_stock_data() -> Dict:
     """
@@ -121,16 +112,14 @@ def sample_stock_data() -> Dict:
     Returns:
         Dict: Sample data for testing
     """
+    now = datetime.now()
     return {
-        'symbol': 'AAPL',
-        'price': 150.0,
-        'volume': 1000000.0,
-        'timestamp': '2024-02-20 12:00:00',
-        'collected_at': datetime.now().isoformat(),
+        "symbol": "AAPL",
+        "price": 150.0,
+        "volume": 1000000.0,
+        "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "collected_at": now.isoformat(),
     }
-
-
-# multiple_stock_data creates multiple sample data for testing like symbol, price, volume, timestamp, collected_at
 
 
 @pytest.fixture
@@ -141,26 +130,23 @@ def multiple_stock_data() -> List[Dict]:
     Returns:
         List[Dict]: Sample data list for testing
     """
-    base_time = datetime(2024, 2, 20, 12, 0, 0)
+    now = datetime.now()
     return [
         {
-            'symbol': symbol,
-            'price': 100.0 + i,
-            'volume': 1000000.0 + (i * 1000),
-            'timestamp': (base_time).strftime('%Y-%m-%d %H:%M:%S'),
-            'collected_at': (base_time).isoformat(),
+            "symbol": symbol,
+            "price": 150.0,  # Same price for all stocks in test
+            "volume": 1000000.0,
+            "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "collected_at": now.isoformat(),
         }
-        for i, symbol in enumerate(['AAPL', 'MSFT', 'GOOGL'])
+        for symbol in ["AAPL", "MSFT", "GOOGL"]
     ]
 
 
-# clean_db deletes all data from the database
-
-
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def clean_db(db_session: Session) -> None:
     """
-    Clean the test database.
+    Clean the test database before each test.
 
     Args:
         db_session: SQLAlchemy session object

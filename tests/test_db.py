@@ -1,162 +1,159 @@
-"""Veritabanı işlemleri için test modülü."""
+"""Test module for database operations"""
 
 from datetime import datetime
-from typing import Dict, List
+from typing import Any, Dict, List, Union, cast
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.database.postgres_manager import PostgresManager, StockData
+
+StockDataDict = Dict[str, Union[str, float, datetime]]
+InvalidDataDict = Dict[str, Union[str, float, None]]
 
 
 def test_db_connection(db_manager: PostgresManager) -> None:
     """
-    Veritabanı bağlantı testi.
+    Test for database connection.
 
     Args:
-        db_manager: PostgresManager fixture'ı
+        db_manager: PostgresManager fixture
     """
-    assert db_manager.engine is not None, "Engine oluşturulamadı"
-    assert db_manager.Session is not None, "Session oluşturulamadı"
+    assert db_manager.engine is not None, "Engine could not be created"
+    assert isinstance(db_manager.Session, sessionmaker), "Session could not be created"
 
-    # Bağlantıyı test et
+    # Test connection
     with db_manager.engine.connect() as conn:
-        result = conn.execute("SELECT 1")
-        assert result.scalar() == 1, "Veritabanı bağlantısı başarısız"
+        result = conn.execute(text("SELECT 1"))
+        assert result.scalar() == 1, "Database connection failed"
 
 
 def test_insert_stock_data(
     db_manager: PostgresManager,
-    sample_stock_data: Dict,
-    clean_db: None
+    sample_stock_data: StockDataDict,
 ) -> None:
     """
-    Veri ekleme testi.
+    Test for data insertion.
 
     Args:
-        db_manager: PostgresManager fixture'ı
-        sample_stock_data: Örnek veri fixture'ı
-        clean_db: Veritabanı temizleme fixture'ı
+        db_manager: PostgresManager fixture
+        sample_stock_data: Sample data fixture
     """
-    # Veriyi ekle
+    # Insert data
     result = db_manager.insert_stock_data(sample_stock_data)
-    assert result is not None, "Veri eklenemedi"
-    
-    # Eklenen veriyi kontrol et
-    session = db_manager.Session()
+    assert result is not None, "Data could not be inserted"
+
+    # Check inserted data
+    session_factory = cast(sessionmaker, db_manager.Session)
+    session = session_factory()
     try:
-        record = session.query(StockData)\
-            .filter_by(symbol=sample_stock_data['symbol'])\
+        record = (
+            session.query(StockData)
+            .filter_by(symbol=sample_stock_data["symbol"])
             .first()
-        
-        assert record is not None, "Kayıt bulunamadı"
-        assert record.symbol == sample_stock_data['symbol'], "Sembol eşleşmiyor"
-        assert record.price == sample_stock_data['price'], "Fiyat eşleşmiyor"
-        assert record.volume == sample_stock_data['volume'], "Hacim eşleşmiyor"
+        )
+
+        assert record is not None, "Record not found"
+        assert record.symbol == sample_stock_data["symbol"], "Symbol does not match"
+        assert record.price == sample_stock_data["price"], "Price does not match"
+        assert record.volume == sample_stock_data["volume"], "Volume does not match"
     finally:
         session.close()
 
 
 def test_get_latest_records(
     db_manager: PostgresManager,
-    sample_stock_data: Dict,
-    clean_db: None
+    sample_stock_data: StockDataDict,
 ) -> None:
     """
-    Son kayıtları getirme testi.
+    Test for getting latest records.
 
     Args:
-        db_manager: PostgresManager fixture'ı
-        sample_stock_data: Örnek veri fixture'ı
-        clean_db: Veritabanı temizleme fixture'ı
+        db_manager: PostgresManager fixture
+        sample_stock_data: Sample data fixture
     """
-    # Test verilerini ekle
+    # Insert test data
     for i in range(5):
         data = sample_stock_data.copy()
-        data['price'] = float(100 + i)  # Her kayıt için farklı fiyat
-        data['timestamp'] = f"2024-02-20 12:{i:02d}:00"
-        data['collected_at'] = f"2024-02-20T12:{i:02d}:00"
+        data["price"] = float(100 + i)  # Different price for each record
+        data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        data["collected_at"] = datetime.now().isoformat()
         result = db_manager.insert_stock_data(data)
-        assert result is not None, f"Veri eklenemedi: {data}"
-    
-    # Son 3 kaydı al
+        assert result is not None, f"Data could not be inserted: {data}"
+
+    # Get last 3 records
     records = db_manager.get_latest_records(limit=3)
-    
-    # Sonuçları kontrol et
-    assert len(records) == 3, "Yanlış sayıda kayıt döndü"
+
+    # Check results
+    assert len(records) == 3, "Wrong number of records returned"
     assert records[0].price > records[1].price, (
-        f"İlk fiyat ({records[0].price}) ikinci fiyattan "
-        f"({records[1].price}) büyük olmalı"
+        f"First price ({records[0].price}) should be greater than "
+        f"second price ({records[1].price})"
     )
     assert records[1].price > records[2].price, (
-        f"İkinci fiyat ({records[1].price}) üçüncü fiyattan "
-        f"({records[2].price}) büyük olmalı"
+        f"Second price ({records[1].price}) should be greater than "
+        f"third price ({records[2].price})"
     )
 
 
 def test_bulk_insert(
     db_manager: PostgresManager,
-    multiple_stock_data: List[Dict],
-    clean_db: None
+    multiple_stock_data: List[StockDataDict],
 ) -> None:
     """
-    Toplu veri ekleme testi.
+    Test for bulk data insertion.
 
     Args:
-        db_manager: PostgresManager fixture'ı
-        multiple_stock_data: Çoklu veri fixture'ı
-        clean_db: Veritabanı temizleme fixture'ı
+        db_manager: PostgresManager fixture
+        multiple_stock_data: Multiple data fixture
     """
-    # Verileri ekle
+    # Insert data
     for data in multiple_stock_data:
         result = db_manager.insert_stock_data(data)
-        assert result is not None, f"Veri eklenemedi: {data}"
-    
-    # Eklenen verileri kontrol et
-    session = db_manager.Session()
+        assert result is not None, f"Data could not be inserted: {data}"
+
+    # Check inserted data
+    session_factory = cast(sessionmaker, db_manager.Session)
+    session = session_factory()
     try:
         for data in multiple_stock_data:
-            record = session.query(StockData)\
-                .filter_by(symbol=data['symbol'])\
-                .first()
-            
-            assert record is not None, f"Kayıt bulunamadı: {data['symbol']}"
-            assert record.price == data['price'], (
-                f"Fiyat eşleşmiyor: {data['symbol']}"
-            )
+            record = session.query(StockData).filter_by(symbol=data["symbol"]).first()
+
+            assert record is not None, f"Record not found: {data['symbol']}"
+            assert (
+                record.price == data["price"]
+            ), f"Price does not match: {data['symbol']}"
     finally:
         session.close()
 
 
-def test_error_handling(
-    db_manager: PostgresManager,
-    clean_db: None
-) -> None:
+def test_error_handling(db_manager: PostgresManager) -> None:
     """
-    Hata yönetimi testi.
+    Test for error handling.
 
     Args:
-        db_manager: PostgresManager fixture'ı
-        clean_db: Veritabanı temizleme fixture'ı
+        db_manager: PostgresManager fixture
     """
-    # Geçersiz veri
-    invalid_data = {
-        'symbol': 'TEST' * 10,  # Çok uzun sembol
-        'price': 'invalid',     # Geçersiz fiyat tipi
-        'volume': None,         # Boş hacim
-        'timestamp': 'invalid', # Geçersiz zaman damgası
-        'collected_at': 'now'   # Geçersiz toplama zamanı
+    # Invalid data with explicit type casting
+    invalid_data: InvalidDataDict = {
+        "symbol": "TEST" * 10,  # Too long symbol
+        "price": "invalid",  # Invalid price type
+        "volume": None,  # Empty volume
+        "timestamp": "invalid",  # Invalid timestamp
+        "collected_at": "now",  # Invalid collection time
     }
-    
-    # Eklemeyi dene
-    result = db_manager.insert_stock_data(invalid_data)
-    assert result is None, "Geçersiz veri kabul edildi"
-    
-    # Veritabanında kayıt olmamalı
-    session = db_manager.Session()
+
+    # Try to insert - using Any to bypass type checking for invalid data test
+    result = db_manager.insert_stock_data(invalid_data)  # type: ignore
+    assert result is None, "Invalid data accepted"
+
+    # No record should be in database
+    session_factory = cast(sessionmaker, db_manager.Session)
+    session = session_factory()
     try:
         count = session.query(StockData).count()
-        assert count == 0, "Geçersiz veri kaydedildi"
+        assert count == 0, "Invalid data was inserted"
     finally:
         session.close()
 
