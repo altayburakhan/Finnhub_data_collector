@@ -1,4 +1,4 @@
-"""Streamlit ile veri görselleştirme uygulaması."""
+"""Data visualization application with Streamlit."""
 
 import logging
 import os
@@ -13,51 +13,51 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
 
-# Sabitler
-CACHE_TTL = 3  # saniye
-REFRESH_INTERVAL = 3  # saniye
+# Constants
+CACHE_TTL = 3  # seconds
+REFRESH_INTERVAL = 3  # seconds
 DEFAULT_HOURS = 1
 MAX_HOURS = 24
 
-# Log yapılandırması
+# Logging configuration
 logger = logging.getLogger(__name__)
 
-# .env dosyasını yükle
+# Load .env file
 load_dotenv()
 
 
 @st.cache_resource
 def get_db_connection() -> Optional[Engine]:
-    """Veritabanı bağlantısı oluştur."""
+    """Create database connection."""
     try:
-        # Veritabanı URL'sini parçalı oluştur
+        # Create database URL
         user = os.getenv("POSTGRES_USER")
         pwd = os.getenv("POSTGRES_PASSWORD")
         host = os.getenv("POSTGRES_HOST")
         port = os.getenv("POSTGRES_PORT")
         db = os.getenv("POSTGRES_DB")
 
-        # URL'yi oluştur
+        # Create URL
         url = f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
         return create_engine(url)
     except Exception as e:
-        st.error(f"Veritabanı bağlantı hatası: {str(e)}")
+        st.error(f"Database connection error: {str(e)}")
         return None
 
 
 @st.cache_data(ttl=CACHE_TTL)
 def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
-    """Son n saatlik veriyi yükle."""
+    """Load data for last n hours."""
     try:
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        # SQL sorgusunu parçalara böl
+        # Split SQL query into parts
         fields = ["symbol", "price", "volume", "timestamp", "collected_at"]
         select_fields = ", ".join(fields)
         window_start = "AVG(price) OVER (PARTITION BY symbol"
         window_end = "ORDER BY collected_at "
 
-        # Sorgu parçalarını birleştir
+        # Join query parts
         select_base = f"SELECT {select_fields}"
         window_full = f"{window_start} {window_end}"
         select_clause = f"{select_base}, {window_full}"
@@ -72,14 +72,14 @@ def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
             "ORDER BY collected_at DESC"
         )
 
-        # Sorguyu birleştir
+        # Join query parts
         query = select_clause + window_clause + from_clause
 
-        # Parametreleri hazırla
+        # Prepare parameters
         params = {"cutoff": cutoff_time}
         date_cols = ["timestamp", "collected_at"]
 
-        # Sorguyu çalıştır
+        # Run query
         df = pd.read_sql_query(
             query,
             _engine,
@@ -88,19 +88,19 @@ def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
         )
         return df.copy()
     except Exception as e:
-        st.error(f"Veri yükleme hatası: {str(e)}")
+        st.error(f"Data loading error: {str(e)}")
         return pd.DataFrame()
 
 
 def get_price_change(prices: pd.Series) -> tuple[float, float]:
-    """Fiyat değişimini hesapla."""
+    """Calculate price change."""
     last = prices.iloc[0]
     change = last - prices.iloc[-1]
     return last, change
 
 
 def create_metrics(symbol_data: pd.DataFrame) -> None:
-    """İstatistik metriklerini göster."""
+    """Show statistics metrics."""
     col1, col2, col3 = st.columns(3)
     with col1:
         last_price, change = get_price_change(symbol_data["price"])
@@ -112,7 +112,7 @@ def create_metrics(symbol_data: pd.DataFrame) -> None:
 
 
 def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
-    """Fiyat grafiğini oluştur."""
+    """Create price chart."""
     fig = go.Figure()
 
     # Fiyat çizgisi
@@ -146,9 +146,9 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
 
 
 def main() -> None:
-    """Ana uygulama fonksiyonu."""
+    """Main application function."""
     page_config = {
-        "page_title": "Hisse Senedi Takip",
+        "page_title": "Stock Tracker",
         "page_icon": "📈",
         "layout": "wide",
     }
@@ -157,16 +157,16 @@ def main() -> None:
     # Veritabanı bağlantısı
     engine = get_db_connection()
     if not engine:
-        st.error("Veritabanına bağlanılamadı!")
+        st.error("Database connection failed!")
         return
 
-    # Ana başlık
-    st.title("📊 Hisse Senedi Takip Paneli")
+    # Main title
+    st.title("📊 Stock Tracker Dashboard")
 
     # Sidebar kontrolleri
     with st.sidebar:
         slider_params = {
-            "label": "Veri Aralığı (Saat)",
+            "label": "Data Range (Hours)",
             "min_value": 1,
             "max_value": MAX_HOURS,
             "value": DEFAULT_HOURS,
@@ -175,7 +175,7 @@ def main() -> None:
         hours = st.slider(**slider_params)
         update_time = st.empty()
 
-    # Placeholder'ları oluştur
+    # Create placeholders
     metrics_placeholder = st.empty()
     chart_placeholder = st.empty()
     table_placeholder = st.empty()
@@ -183,64 +183,64 @@ def main() -> None:
     # İlk veriyi yükle
     df = load_data(engine, hours)
     if df.empty:
-        st.warning("Veri bulunamadı!")
+        st.warning("Data not found!")
         return
 
-    # Sembol seçimi - döngü dışında
+    # Symbol selection - outside loop
     symbols = sorted(df["symbol"].unique())
     symbol_container = st.sidebar.empty()
     selected_symbol = symbol_container.selectbox(
-        "Hisse Senedi", symbols, key="symbol_select"
+        "Stock", symbols, key="symbol_select"
     )
 
-    # Veri yükleme ve güncelleme döngüsü
+    # Data loading and update loop
     while True:
         try:
-            # Son güncelleme zamanını formatla
+            # Format last update time
             time_format = "%H:%M:%S"
             current_time = datetime.now().strftime(time_format)
-            update_msg = f"Son güncelleme: {current_time}"
+            update_msg = f"Last update: {current_time}"
             update_time.text(update_msg)
 
-            # Cache'i temizle ve veriyi yeniden yükle
+            # Clear cache and reload data
             st.cache_data.clear()
             df = load_data(engine, hours)
 
             if df.empty:
-                st.warning("Veri bulunamadı!")
+                st.warning("Data not found!")
                 time.sleep(REFRESH_INTERVAL)
                 continue
 
-            # Seçilen sembol için veri
+            # Data for selected symbol
             symbol_data = df[df["symbol"] == selected_symbol]
 
-            # İstatistikler
+            # Statistics
             with metrics_placeholder.container():
                 create_metrics(symbol_data)
 
-            # Grafik
+            # Chart
             with chart_placeholder.container():
                 create_chart(symbol_data, selected_symbol)
 
-            # Tablo
+            # Table
             with table_placeholder.container():
                 st.dataframe(
                     symbol_data[["collected_at", "price", "volume"]]
                     .rename(
                         columns={
-                            "collected_at": "Zaman",
-                            "price": "Fiyat",
-                            "volume": "Hacim",
+                            "collected_at": "Time",
+                            "price": "Price",
+                            "volume": "Volume",
                         }
                     )
                     .head(10)
                 )
 
-            # Yenileme aralığı
+            # Refresh interval
             time.sleep(REFRESH_INTERVAL)
 
         except Exception as e:
-            st.error(f"Bir hata oluştu: {str(e)}")
+            st.error(f"An error occurred: {str(e)}")
             time.sleep(REFRESH_INTERVAL)
 
 
