@@ -67,6 +67,6 @@ jobs:
 
     - name: Run tests
       run: |
-        poetry run pytest -n auto --dist loadfile
+        poetry run pytest -v
       env:
         PYTHONPATH: ${{ github.workspace }}
