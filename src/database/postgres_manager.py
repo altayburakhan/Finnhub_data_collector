@@ -93,18 +93,57 @@ class PostgresManager:
         """
         session = self._get_session()
         try:
+            # Validate data types before casting
+            if not isinstance(data.get("symbol"), str):
+                raise ValueError("Symbol must be a string")
+            if (
+                not isinstance(data.get("price"), (int, float))
+                and not str(data.get("price", "")).replace(".", "").isdigit()
+            ):
+                raise ValueError("Price must be a number")
+            if data.get("volume") is not None and not isinstance(
+                data.get("volume"), (int, float)
+            ):
+                raise ValueError("Volume must be a number or None")
+
             symbol = cast(str, data["symbol"])
-            price = cast(float, data["price"])
-            volume = cast(float, data["volume"])
+            if len(symbol) > 10:
+                raise ValueError("Symbol length must be 10 characters or less")
+
+            # Try to convert price to float
+            try:
+                price = float(cast(Union[str, float], data["price"]))
+            except (ValueError, TypeError):
+                raise ValueError("Invalid price format")
+
+            # Handle volume (can be None)
+            volume = None
+            if data.get("volume") is not None:
+                try:
+                    volume = float(cast(Union[str, float], data["volume"]))
+                except (ValueError, TypeError):
+                    raise ValueError("Invalid volume format")
+
+            # Validate and parse timestamps
             timestamp_str = cast(str, data["timestamp"])
             collected_at_str = cast(str, data["collected_at"])
+
+            try:
+                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                raise ValueError("Invalid timestamp format")
+
+            try:
+                collected_at = datetime.fromisoformat(collected_at_str)
+            except ValueError:
+                raise ValueError("Invalid collected_at format")
 
             stock_data = StockData(
                 symbol=symbol,
                 price=price,
                 volume=volume,
-                timestamp=datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S"),
-                collected_at=datetime.fromisoformat(collected_at_str),
+                timestamp=timestamp,
+                collected_at=collected_at,
             )
 
             session.add(stock_data)

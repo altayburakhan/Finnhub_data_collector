@@ -100,7 +100,8 @@ def db_manager(engine: Engine, tables: None) -> PostgresManager:
     """
     manager = PostgresManager()
     manager.engine = engine
-    manager.Session = sessionmaker(bind=engine)
+    manager._session_factory = sessionmaker(bind=engine)
+    manager.Session = manager._session_factory
     return manager
 
 
@@ -151,5 +152,9 @@ def clean_db(db_session: Session) -> None:
     Args:
         db_session: SQLAlchemy session object
     """
-    db_session.query(StockData).delete()
-    db_session.commit()
+    try:
+        db_session.query(StockData).delete()
+        db_session.commit()
+    except Exception as e:
+        db_session.rollback()
+        raise e
