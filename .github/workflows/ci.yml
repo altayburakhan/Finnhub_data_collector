@@ -5,6 +5,20 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: Nx5xax77z
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
     - uses: actions/checkout@v3
@@ -18,8 +32,24 @@ jobs:
       run: |
         curl -sSL https://install.python-poetry.org | python3 -
 
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+
     - name: Install dependencies
-      run: poetry install
+      run: |
+        poetry install --no-interaction
+
+    - name: Create .env file
+      run: |
+        echo "FINNHUB_API_KEY=cure0ahr01qgoble9ergcure0ahr01qgoble9es0" >> .env
+        echo "POSTGRES_USER=postgres" >> .env
+        echo "POSTGRES_PASSWORD=Nx5xax77z" >> .env
+        echo "POSTGRES_DB=postgres" >> .env
+        echo "POSTGRES_HOST=localhost" >> .env
+        echo "POSTGRES_PORT=5432" >> .env
 
     - name: Run tests
-      run: poetry run pytest
+      run: |
+        poetry run pytest
