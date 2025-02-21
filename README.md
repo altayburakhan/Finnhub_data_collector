@@ -27,22 +27,32 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 
 ## Features
 
--   **Real-time Data:** Fetches stock prices, volumes, and timestamps in real-time using the Finnhub WebSocket API.
--   **Data Storage:** Stores the incoming data in a PostgreSQL database for persistence and analysis.
+-   **Real-time Data:** Fetches stock prices, volumes, and timestamps in real-time using the Finnhub WebSocket API. The `FinnhubWebSocket` class in `main.py` (startLine: 37, endLine: 148) manages the connection and data processing.
+-   **Data Storage:** Stores the incoming data in a PostgreSQL database for persistence and analysis. The `PostgresManager` class in `src/database/postgres_manager.py` (startLine: 43, endLine: 182) handles database interactions.
 -   **Interactive Dashboard:** Uses Streamlit to create an interactive dashboard with:
     -   Real-time price charts
     -   Key metrics (last price, average price, volume)
     -   Data tables
     -   Configurable data range
--   **Data Quality Checks:** Performs automated data quality checks to ensure data accuracy and reliability.
--   **Rate Limiting:** Implements rate limiting to prevent exceeding the Finnhub API limits.
--   **Automated Testing:** Includes a comprehensive suite of tests to ensure code quality and reliability.
+    The Streamlit application is located in `src/visualization/app.py` (startLine: 148, endLine: 194).
+-   **Data Quality Checks:** Performs automated data quality checks to ensure data accuracy and reliability. The `check_data.py` script (startLine: 18, endLine: 192) calculates statistics and identifies potential issues.
+-   **Rate Limiting:** Implements rate limiting to prevent exceeding the Finnhub API limits. The `RateLimiter` class in `src/utils/rate_limiter.py` (startLine: 7, endLine: 45) controls the request rate.
+-   **Automated Testing:** Includes a comprehensive suite of tests to ensure code quality and reliability. The tests are located in the `tests` directory and cover database operations (`test_db.py`) and rate limiting (`test_rate_limiter.py`).
+-   **CI/CD:** Uses GitHub Actions for continuous integration, automating the testing process on every push and pull request. The workflow configuration is in `.github/workflows/ci.yml`.
 
 ## Requirements
 
 -   Python 3.12 or higher
 -   PostgreSQL 13 or higher
 -   Poetry for dependency management
+-   Dependencies listed in `pyproject.toml` (or `requirements.txt`):
+    -   `websocket-client`: For WebSocket communication with Finnhub.
+    -   `python-dotenv`: For loading environment variables from a `.env` file.
+    -   `SQLAlchemy`: For interacting with the PostgreSQL database.
+    -   `psycopg2-binary`: PostgreSQL adapter for Python.
+    -   `streamlit`: For creating the interactive dashboard.
+    -   `plotly`: For creating interactive charts in Streamlit.
+    -   `pandas`: For data manipulation and analysis.
 
 ## Installation
 
@@ -54,18 +64,20 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
     git clone <repository_url>
     cd stock-tracker
     ```
+
 4.  Install dependencies:
 
     ```bash
     poetry install
     ```
+
 5.  Copy `.env.example` to `.env` and fill in your PostgreSQL and Finnhub API credentials:
 
     ```bash
     cp .env.example .env
     ```
 
-    Edit the `.env` file with your actual credentials.  The following environment variables need to be set:
+    Edit the `.env` file with your actual credentials. The following environment variables need to be set:
 
     ```
     POSTGRES_USER=<your_postgres_user>
@@ -75,6 +87,7 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
     POSTGRES_DB=<your_postgres_db>
     FINNHUB_API_KEY=<your_finnhub_api_key>
     ```
+
 6.  Run pre-commit hooks installation:
 
     ```bash
@@ -121,7 +134,6 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 
 ## Project Structure
 
-```
 stock-tracker/
 ├── .github/workflows/ci.yml # CI pipeline configuration
 ├── .gitignore # Specifies intentionally untracked files that Git should ignore
@@ -133,21 +145,21 @@ stock-tracker/
 ├── requirements.txt # Project dependencies (alternative to pyproject.toml)
 ├── setup.py # Setup file
 ├── src/ # Source code directory
-│ ├── __init__.py # Initializes the src directory as a Python package
+│ ├── init.py # Initializes the src directory as a Python package
 │ ├── check_data.py # Data quality check module
 │ ├── database/ # Database related modules
-│ │ ├── __init__.py # Initializes the database directory as a Python package
+│ │ ├── init.py # Initializes the database directory as a Python package
 │ │ ├── postgres_manager.py # PostgreSQL database management module
 │ │ ├── reset_db.py # Database reset module
 │ │ └── test_connection.py # Database connection test module
 │ ├── types/ # Type stubs
 │ │ └── websocket.pyi # Websocket type stub file
 │ ├── visualization/ # Visualization related modules
-│ │ ├── __init__.py # Initializes the visualization directory as a Python package
+│ │ ├── init.py # Initializes the visualization directory as a Python package
 │ │ └── app.py # Streamlit application for data visualization
 │ └── main.py # Main application module
 ├── tests/ # Test suite directory
-│ ├── __init__.py # Initializes the tests directory as a Python package
+│ ├── init.py # Initializes the tests directory as a Python package
 │ ├── conftest.py # Pytest configuration and fixtures
 │ ├── test_db.py # Database tests
 │ └── test_rate_limiter.py # Rate limiter tests
@@ -155,7 +167,7 @@ stock-tracker/
 
 ## Testing
 
-The project includes a comprehensive test suite using `pytest`. To run the tests, use the following command:
+The project includes a comprehensive test suite using `pytest`. The test configuration and fixtures are defined in `tests/conftest.py` (startLine: 20, endLine: 173). To run the tests, use the following command:
 
 ```bash
 poetry run pytest
@@ -165,7 +177,7 @@ poetry run pytest
 
 The project uses GitHub Actions for Continuous Integration. The CI workflow is defined in `.github/workflows/ci.yml` and includes:
 
--   Setting up Python 3.12
+-   Setting up Python ${{ matrix.python-version }}
 -   Installing Poetry
 -   Installing dependencies
 -   Running tests
@@ -173,9 +185,10 @@ The project uses GitHub Actions for Continuous Integration. The CI workflow is d
 ## Rate Limiting
 
 The project implements rate limiting to ensure we don't exceed Finnhub's API limits:
-- WebSocket connection: Maximum 20 requests per minute
-- Automatic reconnection with exponential backoff
-- Rate limit error handling (HTTP 429)
+
+-   WebSocket connection: Maximum 20 requests per minute
+-   Automatic reconnection with exponential backoff
+-   Rate limit error handling (HTTP 429)
 
 ## Contributing
 
