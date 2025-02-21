@@ -6,7 +6,7 @@ from typing import Dict, Generator, List
 
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -78,6 +78,14 @@ def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     connection = engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection)
+
+    # Clean the database before each test
+    try:
+        session.execute(text("TRUNCATE TABLE stock_data RESTART IDENTITY CASCADE"))
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise e
 
     yield session
 
@@ -153,7 +161,7 @@ def clean_db(db_session: Session) -> None:
         db_session: SQLAlchemy session object
     """
     try:
-        db_session.query(StockData).delete()
+        db_session.execute(text("TRUNCATE TABLE stock_data RESTART IDENTITY CASCADE"))
         db_session.commit()
     except Exception as e:
         db_session.rollback()
