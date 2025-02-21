@@ -1,4 +1,4 @@
-"""Veritabanını sıfırlama ve yeniden oluşturma modülü."""
+"""Module for resetting and recreating the database."""
 
 import logging
 import os
@@ -8,19 +8,19 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 
-# Log yapılandırması
+# Log configuration
 logger = logging.getLogger(__name__)
 
-# .env dosyasını yükle
+# Load .env file
 load_dotenv()
 
 
 def get_db_connection() -> Optional[Engine]:
     """
-    Veritabanı bağlantısı oluştur.
+    Create database connection.
 
     Returns:
-        Optional[Engine]: SQLAlchemy engine objesi veya None
+        Optional[Engine]: SQLAlchemy engine object or None
     """
     try:
         db_url = (
@@ -32,39 +32,45 @@ def get_db_connection() -> Optional[Engine]:
         )
         return create_engine(db_url)
     except Exception as e:
-        logger.error(f"Veritabanı bağlantı hatası: {str(e)}")
+        logger.error(f"Database connection error: {str(e)}")
         return None
 
 
 def reset_database(engine: Engine) -> bool:
     """
-    Veritabanını sıfırla ve tabloları yeniden oluştur.
+    Reset database and recreate tables.
 
     Args:
-        engine: SQLAlchemy engine objesi
+        engine: SQLAlchemy engine object
 
     Returns:
-        bool: İşlem başarılı ise True, değilse False
+        bool: True if successful, False otherwise
     """
     try:
-        # Mevcut bağlantıları kapat
+        # Close existing connections
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 SELECT pg_terminate_backend(pg_stat_activity.pid)
                 FROM pg_stat_activity
                 WHERE pg_stat_activity.datname = current_database()
                 AND pid <> pg_backend_pid();
-            """))
+            """
+                )
+            )
             conn.commit()
 
-        # Tabloları sil
+        # Drop tables
         with engine.connect() as conn:
             conn.execute(text("DROP TABLE IF EXISTS stock_data CASCADE;"))
             conn.commit()
 
-        # Yeni tabloyu oluştur
+        # Create new table
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE stock_data (
                     id SERIAL PRIMARY KEY,
                     symbol VARCHAR(10) NOT NULL,
@@ -73,38 +79,48 @@ def reset_database(engine: Engine) -> bool:
                     timestamp TIMESTAMP NOT NULL,
                     collected_at TIMESTAMP NOT NULL
                 );
-            """))
-            
-            # İndexleri oluştur
-            conn.execute(text("""
-                CREATE INDEX idx_stock_symbol 
+            """
+                )
+            )
+
+            # Create indexes
+            conn.execute(
+                text(
+                    """
+                CREATE INDEX idx_stock_symbol
                 ON stock_data(symbol);
-            """))
-            conn.execute(text("""
-                CREATE INDEX idx_stock_timestamp 
+            """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                CREATE INDEX idx_stock_timestamp
                 ON stock_data(timestamp);
-            """))
+            """
+                )
+            )
             conn.commit()
 
-        logger.info("Veritabanı başarıyla sıfırlandı")
+        logger.info("Database reset successfully")
         return True
 
     except Exception as e:
-        logger.error(f"Veritabanı sıfırlama hatası: {str(e)}")
+        logger.error(f"Database reset error: {str(e)}")
         return False
 
 
 def main() -> None:
-    """Ana uygulama fonksiyonu."""
+    """Main application function."""
     engine = get_db_connection()
     if not engine:
-        logger.error("Veritabanına bağlanılamadı!")
+        logger.error("Database connection could not be created!")
         return
 
     if reset_database(engine):
-        logger.info("Veritabanı sıfırlama işlemi başarılı")
+        logger.info("Database reset successful")
     else:
-        logger.error("Veritabanı sıfırlama işlemi başarısız!")
+        logger.error("Database reset failed!")
 
 
 if __name__ == "__main__":

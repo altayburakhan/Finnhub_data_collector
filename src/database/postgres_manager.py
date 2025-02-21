@@ -1,4 +1,4 @@
-"""PostgreSQL veritabanı yönetimi için modül."""
+"""Module for PostgreSQL database management."""
 
 import logging
 import os
@@ -11,16 +11,16 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-# SQLAlchemy model base'i
-BaseType = declarative_base()
+# SQLAlchemy base model
+Base = declarative_base()
 
 # Custom types
 StockDataDict = Dict[str, Union[str, float, datetime]]
 SessionMaker = Type[sessionmaker[Session]]
 
 
-class StockData(BaseType):  # type: ignore
-    """Hisse senedi verilerini tutan veritabanı modeli."""
+class StockData(Base):  # type: ignore
+    """Database model for stock data."""
 
     __tablename__ = "stock_data"
 
@@ -41,12 +41,13 @@ class StockData(BaseType):  # type: ignore
 
 
 class PostgresManager:
-    """PostgreSQL veritabanı işlemlerini yöneten sınıf."""
+    """Class for managing PostgreSQL database operations."""
 
     def __init__(self) -> None:
         """Initializes PostgreSQL connection."""
         self.engine: Optional[Engine] = None
         self._session_factory: Optional[SessionMaker] = None
+        self.Session: Optional[SessionMaker] = None
         self.setup_connection()
 
     def setup_connection(self) -> None:
@@ -61,7 +62,8 @@ class PostgresManager:
             )
             self.engine = create_engine(db_url)
             self._session_factory = sessionmaker(bind=self.engine)
-            BaseType.metadata.create_all(self.engine)
+            self.Session = self._session_factory
+            Base.metadata.create_all(self.engine)
             logger.info("PostgreSQL connection established successfully")
         except Exception as e:
             logger.error(f"Database connection error: {e}")

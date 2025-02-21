@@ -1,37 +1,37 @@
-"""Veritabanındaki verilerin kalite kontrolü için modül."""
+"""Module for checking data quality in the database."""
 
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Tuple
 
-import pandas as pd
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine.base import Engine
+from sqlalchemy import text
 
 from src.database.postgres_manager import PostgresManager
 
-# Log yapılandırması
+# Log configuration
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 
 def get_data_stats(db: PostgresManager) -> Dict[str, float]:
     """
-    Veritabanındaki verilerin istatistiklerini hesapla.
+    Calculate statistics of data in the database.
 
     Args:
         db: PostgresManager instance
 
     Returns:
-        Dict[str, float]: İstatistik değerleri
+        Dict[str, float]: Statistics values
     """
     try:
-        with db.Session() as session:
-            result = session.execute(text("""
-                SELECT 
+        session = db._get_session()
+        try:
+            result = session.execute(
+                text(
+                    """
+                SELECT
                     COUNT(*) as total_records,
                     COUNT(DISTINCT symbol) as unique_symbols,
                     AVG(price) as avg_price,
@@ -41,13 +41,17 @@ def get_data_stats(db: PostgresManager) -> Dict[str, float]:
                     MIN(collected_at) as first_record,
                     MAX(collected_at) as last_record
                 FROM stock_data;
-            """))
+            """
+                )
+            )
             stats = result.mappings().first()
-            
+
             if not stats:
                 return {}
-            
+
             return dict(stats)
+        finally:
+            session.close()
     except Exception as e:
         logger.error(f"İstatistik hesaplama hatası: {str(e)}")
         return {}
@@ -55,46 +59,57 @@ def get_data_stats(db: PostgresManager) -> Dict[str, float]:
 
 def check_data_quality(db: PostgresManager) -> List[str]:
     """
-    Veri kalitesi kontrollerini gerçekleştir.
+    Perform data quality checks.
 
     Args:
         db: PostgresManager instance
 
     Returns:
-        List[str]: Tespit edilen sorunların listesi
+        List[str]: List of detected issues
     """
     issues = []
     try:
-        with db.Session() as session:
-            # Boş değer kontrolü
-            null_check = session.execute(text("""
-                SELECT COUNT(*) 
-                FROM stock_data 
-                WHERE price IS NULL 
-                OR volume IS NULL 
+        session = db._get_session()
+        try:
+            # Null value check
+            null_check = session.execute(
+                text(
+                    """
+                SELECT COUNT(*)
+                FROM stock_data
+                WHERE price IS NULL
+                OR volume IS NULL
                 OR symbol IS NULL;
-            """))
+            """
+                )
+            )
             null_count = null_check.scalar()
             if null_count > 0:
-                issues.append(f"Boş değer sayısı: {null_count}")
+                issues.append(f"Null count: {null_count}")
 
-            # Negatif fiyat kontrolü
-            negative_price = session.execute(text("""
-                SELECT COUNT(*) 
-                FROM stock_data 
+            # Negative price check
+            negative_price = session.execute(
+                text(
+                    """
+                SELECT COUNT(*)
+                FROM stock_data
                 WHERE price < 0;
-            """))
+            """
+                )
+            )
             if negative_price.scalar() > 0:
-                issues.append("Negatif fiyat değerleri mevcut!")
+                issues.append("Negative price values found!")
 
-            # Veri sıklığı kontrolü
-            frequency_check = session.execute(text("""
+            # Data frequency check
+            frequency_check = session.execute(
+                text(
+                    """
                 WITH time_diff AS (
-                    SELECT 
+                    SELECT
                         symbol,
                         collected_at,
-                        EXTRACT(EPOCH FROM 
-                            collected_at - LAG(collected_at) 
+                        EXTRACT(EPOCH FROM
+                            collected_at - LAG(collected_at)
                             OVER (PARTITION BY symbol ORDER BY collected_at)
                         ) as diff_seconds
                     FROM stock_data
@@ -102,47 +117,53 @@ def check_data_quality(db: PostgresManager) -> List[str]:
                 SELECT AVG(diff_seconds)
                 FROM time_diff
                 WHERE diff_seconds IS NOT NULL;
-            """))
-            avg_seconds = frequency_check.scalar() or 0
-            if avg_seconds > 5:  # 3 saniyeden fazla boşluk varsa
-                issues.append(
-                    f"Ortalama veri toplama sıklığı çok düşük: "
-                    f"{avg_seconds:.1f} saniye"
+            """
                 )
+            )
+            avg_seconds = frequency_check.scalar() or 0
+            if avg_seconds > 5:  # If there is more than 3 seconds gap
+                issues.append(
+                    f"Average data collection frequency is too low: "
+                    f"{avg_seconds:.1f} seconds"
+                )
+        finally:
+            session.close()
 
     except Exception as e:
-        logger.error(f"Veri kalitesi kontrol hatası: {str(e)}")
-        issues.append(f"Kontrol sırasında hata: {str(e)}")
+        logger.error(f"Data quality check error: {str(e)}")
+        issues.append(f"Error during check: {str(e)}")
 
     return issues
 
 
 def get_missing_periods(
-    db: PostgresManager,
-    threshold_seconds: int = 5
+    db: PostgresManager, threshold_seconds: int = 5
 ) -> List[Tuple[str, datetime, datetime]]:
     """
-    Veri eksik olan zaman aralıklarını bul.
+    Find missing time periods.
 
     Args:
         db: PostgresManager instance
-        threshold_seconds: Kabul edilebilir maksimum boşluk (saniye)
+        threshold_seconds: Acceptable maximum gap (seconds)
 
     Returns:
-        List[Tuple[str, datetime, datetime]]: 
-            Sembol ve eksik veri aralıkları listesi
+        List[Tuple[str, datetime, datetime]]:
+            Symbol and missing data periods list
     """
     missing_periods = []
     try:
-        with db.Session() as session:
-            # Her sembol için sıralı zaman damgaları
-            symbols = session.execute(text(
-                "SELECT DISTINCT symbol FROM stock_data;"
-            )).scalars()
+        session = db._get_session()
+        try:
+            # Sorted time stamps for each symbol
+            symbols = session.execute(
+                text("SELECT DISTINCT symbol FROM stock_data;")
+            ).scalars()
 
             for symbol in symbols:
-                result = session.execute(text("""
-                    SELECT 
+                result = session.execute(
+                    text(
+                        """
+                    SELECT
                         collected_at,
                         LEAD(collected_at) OVER (
                             ORDER BY collected_at
@@ -150,7 +171,10 @@ def get_missing_periods(
                     FROM stock_data
                     WHERE symbol = :symbol
                     ORDER BY collected_at;
-                """), {"symbol": symbol})
+                """
+                    ),
+                    {"symbol": symbol},
+                )
 
                 for row in result:
                     if row.next_time:
@@ -159,45 +183,43 @@ def get_missing_periods(
                             missing_periods.append(
                                 (symbol, row.collected_at, row.next_time)
                             )
+        finally:
+            session.close()
 
     except Exception as e:
-        logger.error(f"Eksik period kontrolü hatası: {str(e)}")
+        logger.error(f"Missing period check error: {str(e)}")
 
     return missing_periods
 
 
 def main() -> None:
-    """Ana uygulama fonksiyonu."""
+    """Main application function."""
     db = PostgresManager()
 
-    # İstatistikleri al
+    # Get statistics
     stats = get_data_stats(db)
     if stats:
-        logger.info("\nVeri İstatistikleri:")
+        logger.info("\nData Statistics:")
         for key, value in stats.items():
             logger.info(f"{key}: {value}")
 
-    # Veri kalitesi kontrolü
+    # Data quality check
     issues = check_data_quality(db)
     if issues:
-        logger.warning("\nTespit Edilen Sorunlar:")
+        logger.warning("\nDetected Issues:")
         for issue in issues:
             logger.warning(f"- {issue}")
     else:
-        logger.info("\nVeri kalitesi kontrolleri başarılı!")
+        logger.info("\nData quality checks successful!")
 
-    # Eksik periyodları kontrol et
+    # Check missing periods
     missing_periods = get_missing_periods(db)
     if missing_periods:
-        logger.warning("\nEksik Veri Periyotları:")
+        logger.warning("\nMissing Data Periods:")
         for symbol, start, end in missing_periods:
-            logger.warning(
-                f"Sembol: {symbol}, "
-                f"Başlangıç: {start}, "
-                f"Bitiş: {end}"
-            )
+            logger.warning(f"Symbol: {symbol}, " f"Start: {start}, " f"End: {end}")
     else:
-        logger.info("\nEksik veri periyodu bulunamadı!")
+        logger.info("\nNo missing data periods found!")
 
 
 if __name__ == "__main__":

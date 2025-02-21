@@ -1,4 +1,4 @@
-"""Finnhub.io'dan veri toplama modülü."""
+"""Data collecting in Finnhub.io."""
 
 import json
 import logging
@@ -12,35 +12,35 @@ from dotenv import load_dotenv
 
 from src.database.postgres_manager import PostgresManager
 
-# Sabitler
-RECONNECT_DELAY: int = 60  # saniye
+# Constants
+RECONNECT_DELAY: int = 60  # seconds
 MAX_RETRIES: int = 3
 MAX_REQUESTS_PER_MINUTE: int = 20
 
-# Custom types
+# Custom types as dictionary
 TradeData = Dict[str, Union[str, float, int]]
 WebSocketMessage = Dict[str, Union[str, List[TradeData]]]
 StockDataDict = Dict[str, Union[str, float, datetime]]
 
-# Log yapılandırması
+# Logging configuration
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # every message will be logged
     format=("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
 )
 logger = logging.getLogger(__name__)
 
-# .env dosyasını yükle
+# Load .env file
 load_dotenv()
 
 
 class FinnhubWebSocket:
-    """Finnhub WebSocket bağlantısını yöneten sınıf."""
+    """Manages the Finnhub WebSocket connection."""
 
     def __init__(self) -> None:
-        """WebSocket bağlantısını başlat."""
+        """Starts the WebSocket connection."""
         self.api_key: Optional[str] = os.getenv("FINNHUB_API_KEY")
         if not self.api_key:
-            raise ValueError("FINNHUB_API_KEY bulunamadı!")
+            raise ValueError("FINNHUB_API_KEY not found!")
 
         self.symbols: List[str] = [
             "AAPL",
@@ -62,10 +62,10 @@ class FinnhubWebSocket:
 
     def should_reconnect(self) -> bool:
         """
-        Yeniden bağlanma kontrolü.
+        Reconnection check.
 
         Returns:
-            bool: Yeniden bağlanılmalı mı
+            bool: Should reconnect?
         """
         now: float = time.time()
         if now - self.last_connection_time < RECONNECT_DELAY:
@@ -73,10 +73,10 @@ class FinnhubWebSocket:
         return self.retry_count < MAX_RETRIES
 
     def connect(self) -> None:
-        """WebSocket bağlantısını oluştur."""
+        """Creates the WebSocket connection."""
         if not self.should_reconnect():
             logger.warning(
-                f"Rate limit nedeniyle {RECONNECT_DELAY} saniye bekleniyor..."
+                f"Waiting for {RECONNECT_DELAY} seconds due to rate limit..."
             )
             time.sleep(RECONNECT_DELAY)
             self.retry_count = 0
@@ -94,8 +94,7 @@ class FinnhubWebSocket:
         )
 
     def on_message(self, ws: websocket.WebSocketApp, message: str) -> None:
-        """
-        Processes WebSocket message.
+        """Processes WebSocket message.
 
         Args:
             ws: WebSocket connection
@@ -130,17 +129,17 @@ class FinnhubWebSocket:
 
     def on_error(self, ws: websocket.WebSocketApp, error: str) -> None:
         """
-        WebSocket hatasını işle.
+        Processes WebSocket error.
 
         Args:
-            ws: WebSocket bağlantısı
-            error: Hata mesajı
+            ws: WebSocket connection
+            error: Error message
         """
-        if "429" in str(error):  # Rate limit hatası
-            logger.warning("Rate limit aşıldı, bekleniyor...")
+        if "429" in str(error):  # Rate limit error
+            logger.warning("Rate limit exceeded, waiting...")
             time.sleep(RECONNECT_DELAY)
         else:
-            logger.error(f"WebSocket hatası: {str(error)}")
+            logger.error(f"WebSocket error: {str(error)}")
 
     def on_close(
         self,
@@ -149,51 +148,53 @@ class FinnhubWebSocket:
         close_msg: Optional[str],
     ) -> None:
         """
-        WebSocket bağlantısı kapandığında çalışır.
+        Processes WebSocket connection closure.
 
         Args:
-            ws: WebSocket bağlantısı
-            close_status_code: Kapanma durum kodu
-            close_msg: Kapanma mesajı
+            ws: WebSocket connection
+            close_status_code: Closure status code
+            close_msg: Closure message
         """
-        logger.warning("WebSocket bağlantısı kapandı")
+        logger.warning("WebSocket connection closed")
         if self.should_reconnect():
             self.connect()
             if self.ws:
                 self.ws.run_forever()
         else:
-            logger.error("Maksimum yeniden bağlanma denemesi aşıldı")
+            logger.error("Maximum reconnection attempts exceeded")
 
     def on_open(self, ws: websocket.WebSocketApp) -> None:
         """
-        WebSocket bağlantısı açıldığında çalışır.
+        Processes WebSocket connection opening.
 
         Args:
-            ws: WebSocket bağlantısı
+            ws: WebSocket connection
         """
-        logger.info("WebSocket bağlantısı açıldı")
-        # Sembollere sırayla abone ol
+        logger.info("WebSocket connection opened")
+        # Subscribe to symbols one by one
         for symbol in self.symbols:
             ws.send(json.dumps({"type": "subscribe", "symbol": symbol}))
-            logger.info(f"{symbol} için abonelik başlatıldı")
-            time.sleep(1)  # Rate limit'i aşmamak için bekle
+            logger.info(f"Subscription started for {symbol}")
+            time.sleep(1)  # Wait to avoid rate limit
 
     def run(self) -> None:
-        """WebSocket bağlantısını başlat."""
+        """Starts the WebSocket connection."""
         while True:
             try:
                 if self.ws:
                     self.ws.run_forever()
                 if not self.should_reconnect():
-                    logger.error("Bağlantı kurulamıyor, uygulama durduruluyor")
+                    logger.error(
+                        "Connection could not be established, application stopped"
+                    )
                     break
             except Exception as e:
-                logger.error(f"WebSocket çalıştırma hatası: {str(e)}")
+                logger.error(f"WebSocket run error: {str(e)}")
                 time.sleep(1)
 
 
 def main() -> None:
-    """Ana uygulama fonksiyonu."""
+    """Main application function."""
     ws_client = FinnhubWebSocket()
     ws_client.run()
 
