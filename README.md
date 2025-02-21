@@ -134,35 +134,41 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 
 ## Project Structure
 
+```
 stock-tracker/
-├── .github/workflows/ci.yml # CI pipeline configuration
-├── .gitignore # Specifies intentionally untracked files that Git should ignore
-├── .pre-commit-config.yaml # Pre-commit configuration
-├── .python-version # Python version
-├── README.md # Project documentation
-├── mypy.ini # Mypy configuration
-├── pyproject.toml # Project dependencies and build configuration
-├── requirements.txt # Project dependencies (alternative to pyproject.toml)
-├── setup.py # Setup file
-├── src/ # Source code directory
-│ ├── init.py # Initializes the src directory as a Python package
-│ ├── check_data.py # Data quality check module
-│ ├── database/ # Database related modules
-│ │ ├── init.py # Initializes the database directory as a Python package
-│ │ ├── postgres_manager.py # PostgreSQL database management module
-│ │ ├── reset_db.py # Database reset module
-│ │ └── test_connection.py # Database connection test module
-│ ├── types/ # Type stubs
-│ │ └── websocket.pyi # Websocket type stub file
-│ ├── visualization/ # Visualization related modules
-│ │ ├── init.py # Initializes the visualization directory as a Python package
-│ │ └── app.py # Streamlit application for data visualization
-│ └── main.py # Main application module
-├── tests/ # Test suite directory
-│ ├── init.py # Initializes the tests directory as a Python package
-│ ├── conftest.py # Pytest configuration and fixtures
-│ ├── test_db.py # Database tests
-│ └── test_rate_limiter.py # Rate limiter tests
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # CI pipeline configuration
+├── .gitignore                  # Git ignore rules
+├── .pre-commit-config.yaml     # Pre-commit hook configuration
+├── .python-version             # Python version specification
+├── README.md                   # Project documentation
+├── mypy.ini                    # Mypy configuration
+├── pyproject.toml              # Poetry configuration and dependencies
+├── requirements.txt            # Alternative dependency specification
+├── setup.py                    # Setup configuration
+├── src/                        # Source code directory
+│   ├── __init__.py            # Package initialization
+│   ├── check_data.py          # Data quality check module
+│   ├── database/              # Database related modules
+│   │   ├── __init__.py        # Package initialization
+│   │   ├── postgres_manager.py # PostgreSQL management
+│   │   ├── reset_db.py        # Database reset utility
+│   │   └── test_connection.py # Connection testing
+│   ├── types/                 # Type stub files
+│   │   └── websocket.pyi      # WebSocket type definitions
+│   ├── utils/                 # Utility modules
+│   │   ├── __init__.py        # Package initialization
+│   │   └── rate_limiter.py    # Rate limiting implementation
+│   ├── visualization/         # Visualization modules
+│   │   ├── __init__.py        # Package initialization
+│   │   └── app.py             # Streamlit dashboard
+│   └── main.py                # Main application entry point
+└── tests/                     # Test suite directory
+    ├── __init__.py            # Test package initialization
+    ├── conftest.py            # Test configuration and fixtures
+    ├── test_db.py             # Database tests
+    └── test_rate_limiter.py   # Rate limiter tests
 ```
 
 ## Testing
