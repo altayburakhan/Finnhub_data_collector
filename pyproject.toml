@@ -60,6 +60,18 @@ packages = ["src", "src.database", "src.visualization"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = """
+    -ra
+    -q
+    --strict-markers
+    --tb=short
+    --import-mode=importlib
+    --durations=5
+    --maxfail=2
+    --cache-clear
+"""
 
 [tool.black]
 line-length = 88
