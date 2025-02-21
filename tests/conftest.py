@@ -48,9 +48,6 @@ def engine(db_url: str) -> Engine:
     return create_engine(
         db_url,
         poolclass=StaticPool,  # Use static pool for tests
-        pool_size=5,  # Limit pool size
-        max_overflow=10,  # Limit max connections
-        pool_timeout=30,  # Timeout for getting connection from pool
     )
 
 
