@@ -2,7 +2,15 @@
 
 ## Personal Note
 
-This is my first Python project, which I developed to learn and practice modern software development concepts. The project helped me understand:
+This is my first Python project, which I developed as my entry into the data engineering field. I chose stock market data because it provides an excellent opportunity to work with:
+
+- Real-time streaming data (high frequency, continuous updates)
+- Structured data storage and management
+- Data quality monitoring and validation
+- Data visualization and analytics
+- ETL (Extract, Transform, Load) processes
+
+While I'm not particularly focused on finance, stock market data serves as a perfect learning ground for data engineering concepts due to its real-time nature, high volume, and structured format. This project helped me understand:
 
 - Real-time data processing with WebSocket
 - Database management with PostgreSQL
@@ -11,7 +19,7 @@ This is my first Python project, which I developed to learn and practice modern 
 - Project structuring and modular design
 - Version control with Git and pre-commit hooks
 
-I chose to work with financial data because I'm interested in both technology and finance. This project combines both fields while teaching me valuable software engineering principles.
+Through this project, I've gained practical experience in building a complete data pipeline, from data collection to storage and visualization, which are fundamental skills in data engineering.
 
 ## Overview
 
