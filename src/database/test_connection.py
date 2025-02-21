@@ -1,4 +1,4 @@
-"""Veritabanı bağlantı testi için modül."""
+"""Module for testing database connection."""
 
 import logging
 import os
@@ -8,19 +8,19 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 
-# Log yapılandırması
+# Log configuration
 logger = logging.getLogger(__name__)
 
-# .env dosyasını yükle
+# Load .env file
 load_dotenv()
 
 
 def get_db_connection() -> Optional[Engine]:
     """
-    Veritabanı bağlantısı oluştur.
+    Create database connection.
 
     Returns:
-        Optional[Engine]: SQLAlchemy engine objesi veya None
+        Optional[Engine]: SQLAlchemy engine object or None
     """
     try:
         db_url = (
@@ -32,92 +32,102 @@ def get_db_connection() -> Optional[Engine]:
         )
         return create_engine(db_url)
     except Exception as e:
-        logger.error(f"Veritabanı bağlantı hatası: {str(e)}")
+        logger.error(f"Database connection error: {str(e)}")
         return None
 
 
 def test_connection(engine: Engine) -> Tuple[bool, str]:
     """
-    Veritabanı bağlantısını test et.
+    Test database connection.
 
     Args:
-        engine: SQLAlchemy engine objesi
+        engine: SQLAlchemy engine object
 
     Returns:
-        Tuple[bool, str]: (Başarılı mı, Mesaj)
+        Tuple[bool, str]: (Success, Message)
     """
     try:
-        # Bağlantıyı test et
+        # Test connection
         with engine.connect() as conn:
-            # PostgreSQL versiyonunu al
+            # Get PostgreSQL version
             result = conn.execute(text("SELECT version();"))
             version = result.scalar()
 
-            # Tablo sayısını kontrol et
-            result = conn.execute(text("""
+            # Check table count
+            result = conn.execute(
+                text(
+                    """
                 SELECT count(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public';
-            """))
+            """
+                )
+            )
             table_count = result.scalar()
 
         return True, (
-            f"Bağlantı başarılı!\n"
-            f"PostgreSQL Versiyon: {version}\n"
-            f"Tablo Sayısı: {table_count}"
+            f"Connection successful!\n"
+            f"PostgreSQL Version: {version}\n"
+            f"Table Count: {table_count}"
         )
 
     except Exception as e:
-        error_msg = f"Bağlantı hatası: {str(e)}"
+        error_msg = f"Connection error: {str(e)}"
         logger.error(error_msg)
         return False, error_msg
 
 
 def check_table_exists(engine: Engine, table_name: str) -> bool:
     """
-    Belirtilen tablonun var olup olmadığını kontrol et.
+    Check if the specified table exists.
 
     Args:
-        engine: SQLAlchemy engine objesi
-        table_name: Kontrol edilecek tablo adı
+        engine: SQLAlchemy engine object
+        table_name: Table name to check
 
     Returns:
-        bool: Tablo varsa True, yoksa False
+        bool: True if table exists, False otherwise
     """
     try:
         with engine.connect() as conn:
-            result = conn.execute(text("""
+            result = conn.execute(
+                text(
+                    """
                 SELECT EXISTS (
                     SELECT 1
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
                     AND table_name = :table_name
                 );
-            """), {"table_name": table_name})
-            return result.scalar()
+            """
+                ),
+                {"table_name": table_name},
+            )
+            exists: bool = bool(result.scalar())
+            return exists
     except Exception as e:
-        logger.error(f"Tablo kontrol hatası: {str(e)}")
+        logger.error(f"Table check error: {str(e)}")
         return False
 
 
 def main() -> None:
-    """Ana uygulama fonksiyonu."""
-    # Veritabanı bağlantısını al
+    """Main application function."""
+    # Get database connection
     engine = get_db_connection()
     if not engine:
-        logger.error("Veritabanı bağlantısı oluşturulamadı!")
+        logger.error("Database connection could not be created!")
         return
 
-    # Bağlantıyı test et
+    # Test connection
     success, message = test_connection(engine)
     if success:
         logger.info(message)
-        
-        # stock_data tablosunu kontrol et
+
+        # Check if stock_data table exists
         if check_table_exists(engine, "stock_data"):
-            logger.info("stock_data tablosu mevcut")
+            logger.info("stock_data table exists")
         else:
-            logger.warning("stock_data tablosu bulunamadı!")
+            logger.warning("stock_data table not found!")
     else:
         logger.error(message)
 
