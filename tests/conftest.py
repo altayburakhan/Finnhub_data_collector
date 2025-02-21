@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from src.database.postgres_manager import Base, PostgresManager, StockData
 
@@ -44,7 +45,13 @@ def engine(db_url: str) -> Engine:
     Returns:
         Engine: SQLAlchemy engine object
     """
-    return create_engine(db_url)
+    return create_engine(
+        db_url,
+        poolclass=StaticPool,  # Use static pool for tests
+        pool_size=5,  # Limit pool size
+        max_overflow=10,  # Limit max connections
+        pool_timeout=30,  # Timeout for getting connection from pool
+    )
 
 
 @pytest.fixture(scope="session")
@@ -63,7 +70,7 @@ def tables(engine: Engine) -> Generator[None, None, None]:
     Base.metadata.drop_all(engine)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     """
     Create a database session for testing.
@@ -94,7 +101,7 @@ def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     connection.close()
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def db_manager(engine: Engine, tables: None) -> PostgresManager:
     """
     Create a PostgresManager instance for testing.
@@ -113,7 +120,7 @@ def db_manager(engine: Engine, tables: None) -> PostgresManager:
     return manager
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_stock_data() -> Dict:
     """
     Create sample stock data for testing.
@@ -131,7 +138,7 @@ def sample_stock_data() -> Dict:
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def multiple_stock_data() -> List[Dict]:
     """
     Create multiple sample stock data for testing.
@@ -152,7 +159,7 @@ def multiple_stock_data() -> List[Dict]:
     ]
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def clean_db(db_session: Session) -> None:
     """
     Clean the test database before each test.
