@@ -99,33 +99,46 @@ def get_price_change(prices: pd.Series) -> tuple[float, float]:
     return last, change
 
 
-def create_metrics(symbol_data: pd.DataFrame) -> None:
+def create_metrics(symbol_data: pd.DataFrame, symbol: str) -> None:
     """Show statistics metrics."""
     col1, col2, col3 = st.columns(3)
     with col1:
         last_price, change = get_price_change(symbol_data["price"])
-        st.metric("Son Fiyat", f"${last_price:.2f}", f"{change:.2f}")
+        st.metric(
+            "Son Fiyat",
+            f"${last_price:.2f}",
+            f"{change:.2f}",
+            key=f"metric_price_{symbol}",
+        )
     with col2:
-        st.metric("Ortalama Fiyat", f"${symbol_data['price'].mean():.2f}")
+        st.metric(
+            "Ortalama Fiyat",
+            f"${symbol_data['price'].mean():.2f}",
+            key=f"metric_avg_{symbol}",
+        )
     with col3:
-        st.metric("İşlem Hacmi", f"{symbol_data['volume'].iloc[0]:,.0f}")
+        st.metric(
+            "İşlem Hacmi",
+            f"{symbol_data['volume'].iloc[0]:,.0f}",
+            key=f"metric_volume_{symbol}",
+        )
 
 
 def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
     """Create price chart."""
     fig = go.Figure()
 
-    # Fiyat çizgisi
+    # Price line
     price_trace = go.Scatter(
         x=symbol_data["collected_at"],
         y=symbol_data["price"],
         mode="lines",
-        name="Fiyat",
+        name="Price",
         line=dict(color="#2ecc71", width=2),
     )
     fig.add_trace(price_trace)
 
-    # Hareketli ortalama çizgisi
+    # Moving average line
     ma_trace = go.Scatter(
         x=symbol_data["collected_at"],
         y=symbol_data["price_ma_5"],
@@ -136,13 +149,13 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
     fig.add_trace(ma_trace)
 
     fig.update_layout(
-        title=f"{symbol} Fiyat Grafiği",
-        xaxis_title="Zaman",
-        yaxis_title="Fiyat ($)",
+        title=f"{symbol} Price Chart",
+        xaxis_title="Time",
+        yaxis_title="Price ($)",
         template="plotly_dark",
         height=500,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}")
 
 
 def main() -> None:
@@ -154,7 +167,7 @@ def main() -> None:
     }
     st.set_page_config(**page_config)
 
-    # Veritabanı bağlantısı
+    # Database connection
     engine = get_db_connection()
     if not engine:
         st.error("Database connection failed!")
@@ -163,7 +176,7 @@ def main() -> None:
     # Main title
     st.title("📊 Stock Tracker Dashboard")
 
-    # Sidebar kontrolleri
+    # Sidebar controls
     with st.sidebar:
         slider_params = {
             "label": "Data Range (Hours)",
@@ -180,7 +193,7 @@ def main() -> None:
     chart_placeholder = st.empty()
     table_placeholder = st.empty()
 
-    # İlk veriyi yükle
+    # Load first data
     df = load_data(engine, hours)
     if df.empty:
         st.warning("Data not found!")
@@ -189,9 +202,7 @@ def main() -> None:
     # Symbol selection - outside loop
     symbols = sorted(df["symbol"].unique())
     symbol_container = st.sidebar.empty()
-    selected_symbol = symbol_container.selectbox(
-        "Stock", symbols, key="symbol_select"
-    )
+    selected_symbol = symbol_container.selectbox("Stock", symbols, key="symbol_select")
 
     # Data loading and update loop
     while True:
@@ -216,7 +227,7 @@ def main() -> None:
 
             # Statistics
             with metrics_placeholder.container():
-                create_metrics(symbol_data)
+                create_metrics(symbol_data, selected_symbol)
 
             # Chart
             with chart_placeholder.container():
@@ -233,7 +244,8 @@ def main() -> None:
                             "volume": "Volume",
                         }
                     )
-                    .head(10)
+                    .head(10),
+                    key=f"table_{selected_symbol}",
                 )
 
             # Refresh interval
