@@ -61,7 +61,7 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 3.  Clone this repository:
 
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/altayburakhan/Finnhub_data_collector.git
     cd stock-tracker
     ```
 
