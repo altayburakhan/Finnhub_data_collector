@@ -10,7 +10,7 @@ This is my first Python project, which I developed as my entry into the data eng
 - Data visualization and analytics
 - ETL (Extract, Transform, Load) processes
 
-While I'm not particularly focused on finance, stock market data serves as a perfect learning ground for data engineering concepts due to its real-time nature, high volume, and structured format. This project helped me understand:
+Stock market data serves as a perfect learning ground for data engineering concepts due to its real-time nature, high volume, and structured format. This project helped me understand:
 
 - Real-time data processing with WebSocket
 - Database management with PostgreSQL
