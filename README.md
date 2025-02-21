@@ -1,5 +1,18 @@
 # Stock Tracker
 
+## Personal Note
+
+This is my first Python project, which I developed to learn and practice modern software development concepts. The project helped me understand:
+
+- Real-time data processing with WebSocket
+- Database management with PostgreSQL
+- Data visualization with Streamlit
+- Modern Python development practices (type hints, testing, code quality)
+- Project structuring and modular design
+- Version control with Git and pre-commit hooks
+
+I chose to work with financial data because I'm interested in both technology and finance. This project combines both fields while teaching me valuable software engineering principles.
+
 ## Overview
 
 The Stock Tracker is a real-time stock data tracking and visualization tool. It fetches data from Finnhub.io via a WebSocket, stores it in a PostgreSQL database, and presents it through a Streamlit dashboard. This project provides users with up-to-date stock prices, key metrics, and interactive charts for informed decision-making.
