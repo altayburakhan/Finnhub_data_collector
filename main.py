@@ -11,6 +11,7 @@ import websocket  # type: ignore
 from dotenv import load_dotenv
 
 from src.database.postgres_manager import PostgresManager
+from src.utils.rate_limiter import RateLimiter
 
 # Constants
 RECONNECT_DELAY: int = 60  # seconds
@@ -58,6 +59,9 @@ class FinnhubWebSocket:
         self.ws: Optional[websocket.WebSocketApp] = None
         self.retry_count: int = 0
         self.last_connection_time: float = 0
+        self.rate_limiter: RateLimiter = RateLimiter(
+            max_requests=MAX_REQUESTS_PER_MINUTE, time_window=60
+        )
         self.connect()
 
     def should_reconnect(self) -> bool:
@@ -120,6 +124,8 @@ class FinnhubWebSocket:
                         "collected_at": datetime.now().isoformat(),
                     }
 
+                    # Apply rate limiting
+                    self.rate_limiter.wait_if_needed()
                     result = self.db_manager.insert_stock_data(stock_data)
                     if result:
                         logger.info(f"Data saved: {symbol} - ${price:.2f}")
@@ -171,11 +177,11 @@ class FinnhubWebSocket:
             ws: WebSocket connection
         """
         logger.info("WebSocket connection opened")
-        # Subscribe to symbols one by one
+        # Subscribe to symbols one by one with rate limiting
         for symbol in self.symbols:
+            self.rate_limiter.wait_if_needed()
             ws.send(json.dumps({"type": "subscribe", "symbol": symbol}))
             logger.info(f"Subscription started for {symbol}")
-            time.sleep(1)  # Wait to avoid rate limit
 
     def run(self) -> None:
         """Starts the WebSocket connection."""
