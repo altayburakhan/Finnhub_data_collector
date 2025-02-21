@@ -35,9 +35,62 @@ ENV/
 .vscode/
 *.swp
 *.swo
+.spyderproject
+.spyproject
+.ropeproject
 
 # Logs
 *.log
+logs/
+log/
 
 # Local PostgreSQL data
 data/
+postgres-data/
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+htmlcov/
+
+# Test cache
+.pytest_cache/
+.hypothesis/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Poetry
+poetry.lock
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Documentation
+docs/_build/
+_docs/
+doc/
+
+# System files
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+*~
+
+# Streamlit
+.streamlit/
+
+# Project specific
+*.db
+*.sqlite3
+*.csv
+*.xlsx
+*.parquet
+temp/
+output/
