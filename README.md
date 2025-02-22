@@ -27,18 +27,28 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 
 ## Features
 
--   **Real-time Data:** Fetches stock prices, volumes, and timestamps in real-time using the Finnhub WebSocket API. The `FinnhubWebSocket` class in `main.py` (startLine: 37, endLine: 148) manages the connection and data processing.
--   **Data Storage:** Stores the incoming data in a PostgreSQL database for persistence and analysis. The `PostgresManager` class in `src/database/postgres_manager.py` (startLine: 43, endLine: 182) handles database interactions.
--   **Interactive Dashboard:** Uses Streamlit to create an interactive dashboard with:
-    -   Real-time price charts
-    -   Key metrics (last price, average price, volume)
-    -   Data tables
-    -   Configurable data range
-    The Streamlit application is located in `src/visualization/app.py` (startLine: 148, endLine: 194).
--   **Data Quality Checks:** Performs automated data quality checks to ensure data accuracy and reliability. The `check_data.py` script (startLine: 18, endLine: 192) calculates statistics and identifies potential issues.
--   **Rate Limiting:** Implements rate limiting to prevent exceeding the Finnhub API limits. The `RateLimiter` class in `src/utils/rate_limiter.py` (startLine: 7, endLine: 45) controls the request rate.
--   **Automated Testing:** Includes a comprehensive suite of tests to ensure code quality and reliability. The tests are located in the `tests` directory and cover database operations (`test_db.py`) and rate limiting (`test_rate_limiter.py`).
--   **CI/CD:** Uses GitHub Actions for continuous integration, automating the testing process on every push and pull request. The workflow configuration is in `.github/workflows/ci.yml`.
+Merhaba! Bu projede geliştirdiğim temel özellikler şunlar:
+
+-   **Gerçek Zamanlı Veri Toplama:** Finnhub'ın WebSocket API'si üzerinden anlık hisse fiyatlarını topluyorum. `main.py`'daki `FinnhubWebSocket` sınıfı bu işi yönetiyor. WebSocket ile çalışmak benim için yeni bir deneyimdi ve oldukça öğretici oldu.
+
+-   **Verileri Saklama:** Topladığım verileri PostgreSQL veritabanında saklıyorum. `src/database/postgres_manager.py`'daki `PostgresManager` sınıfı veritabanı işlemlerini yönetiyor. SQL ve veritabanı yönetimi konusunda kendimi her gün geliştiriyorum.
+
+-   **Gösterge Paneli:** Streamlit ile bir dashboard geliştirdim. İçeriğinde:
+    -   Anlık fiyat grafikleri (Plotly kullanarak)
+    -   Temel metrikler (son fiyat, ortalama fiyat, işlem hacmi)
+    -   Veri tabloları
+    -   Özelleştirilebilir zaman aralığı
+    Tüm dashboard kodlarını `src/visualization/app.py`'de bulabilirsiniz.
+
+-   **Veri Kalite Kontrolleri:** Verilerin doğruluğunu kontrol etmek için `check_data.py` ile çeşitli analizler yapıyorum. Bu sayede veri kalitesini sürekli izleyebiliyorum.
+
+-   **Hız Sınırlama:** Finnhub API limitlerini yönetmek için `src/utils/rate_limiter.py`'da bir `RateLimiter` sınıfı geliştirdim. API kullanımını optimize etmek önemli bir öğrenme deneyimi oldu.
+
+-   **Testler:** Kodun güvenilirliğini sağlamak için test süiti ekledim. Testleri `tests` klasöründe bulabilirsiniz. Test yazma konusunda sürekli kendimi geliştiriyorum.
+
+-   **CI/CD:** GitHub Actions ile otomatik test sistemi kurdum. Her kod güncellemesinde testler otomatik olarak çalışıyor. CI/CD süreçlerini öğrenmek benim için değerli bir deneyim oldu.
+
+Not: Bu proje benim data engineering yolculuğumun başlangıcı. Öğrendikçe ve geliştirdikçe projeyi de büyütmeye devam edeceğim.
 
 ## Requirements
 

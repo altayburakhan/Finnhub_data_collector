@@ -1,7 +1,7 @@
 """Module for checking data quality in the database."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
 from sqlalchemy import text
@@ -53,8 +53,59 @@ def get_data_stats(db: PostgresManager) -> Dict[str, float]:
         finally:
             session.close()
     except Exception as e:
-        logger.error(f"İstatistik hesaplama hatası: {str(e)}")
+        logger.error(f"Statistics calculation error: {str(e)}")
         return {}
+
+
+def check_data_distribution(db: PostgresManager) -> None:
+    """Check data distribution for each symbol in last 5 minutes."""
+    try:
+        session = db._get_session()
+        try:
+            cutoff_time = datetime.now() - timedelta(minutes=5)
+            result = session.execute(
+                text(
+                    """
+                WITH time_diffs AS (
+                    SELECT
+                        symbol,
+                        collected_at,
+                        EXTRACT(EPOCH FROM
+                            collected_at - LAG(collected_at)
+                            OVER (PARTITION BY symbol ORDER BY collected_at)
+                        ) as interval_seconds
+                    FROM stock_data
+                    WHERE collected_at > :cutoff
+                )
+                SELECT
+                    symbol,
+                    COUNT(*) as record_count,
+                    AVG(interval_seconds) as avg_interval,
+                    MIN(interval_seconds) as min_interval,
+                    MAX(interval_seconds) as max_interval
+                FROM time_diffs
+                WHERE interval_seconds IS NOT NULL
+                AND interval_seconds > 0
+                GROUP BY symbol
+                ORDER BY symbol;
+            """
+                ),
+                {"cutoff": cutoff_time},
+            )
+
+            logger.info("\nData Distribution (Last 5 minutes):")
+            for row in result.mappings():
+                logger.info(
+                    f"Symbol: {row['symbol']}, "
+                    f"Records: {row['record_count']}, "
+                    f"Avg Interval: {row['avg_interval']:.1f}s, "
+                    f"Min: {row['min_interval']:.1f}s, "
+                    f"Max: {row['max_interval']:.1f}s"
+                )
+        finally:
+            session.close()
+    except Exception as e:
+        logger.error(f"Data distribution check error: {str(e)}")
 
 
 def check_data_quality(db: PostgresManager) -> List[str]:
@@ -104,24 +155,25 @@ def check_data_quality(db: PostgresManager) -> List[str]:
             frequency_check = session.execute(
                 text(
                     """
-                WITH time_diff AS (
+                WITH time_diffs AS (
                     SELECT
                         symbol,
                         collected_at,
                         EXTRACT(EPOCH FROM
                             collected_at - LAG(collected_at)
                             OVER (PARTITION BY symbol ORDER BY collected_at)
-                        ) as diff_seconds
+                        ) as interval_seconds
                     FROM stock_data
                 )
-                SELECT AVG(diff_seconds)
-                FROM time_diff
-                WHERE diff_seconds IS NOT NULL;
+                SELECT AVG(interval_seconds)
+                FROM time_diffs
+                WHERE interval_seconds IS NOT NULL
+                AND interval_seconds > 0;
             """
                 )
             )
             avg_seconds = frequency_check.scalar() or 0
-            if avg_seconds > 5:  # If there is more than 3 seconds gap
+            if avg_seconds > 5:  # If there is more than 5 seconds gap
                 issues.append(
                     f"Average data collection frequency is too low: "
                     f"{avg_seconds:.1f} seconds"
@@ -202,6 +254,9 @@ def main() -> None:
         logger.info("\nData Statistics:")
         for key, value in stats.items():
             logger.info(f"{key}: {value}")
+
+    # Check data distribution
+    check_data_distribution(db)
 
     # Data quality check
     issues = check_data_quality(db)

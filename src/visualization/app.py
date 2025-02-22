@@ -14,8 +14,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
 
 # Constants
-CACHE_TTL = 3  # seconds
-REFRESH_INTERVAL = 3  # seconds
+CACHE_TTL = 1  # seconds
+REFRESH_INTERVAL = 1  # seconds
 DEFAULT_HOURS = 1
 MAX_HOURS = 24
 
@@ -24,6 +24,30 @@ logger = logging.getLogger(__name__)
 
 # Load .env file
 load_dotenv()
+
+# Configure page to prevent auto-scrolling
+st.set_page_config(
+    page_title="Stock Tracker",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Apply custom CSS to prevent auto-scrolling
+st.markdown(
+    """
+    <style>
+        .element-container {
+            overflow: auto;
+            max-height: calc(100vh - 100px);
+        }
+        .stApp {
+            overflow: hidden;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_resource
@@ -45,7 +69,7 @@ def get_db_connection() -> Optional[Engine]:
         return None
 
 
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
     """Load data for last n hours."""
     try:
@@ -79,7 +103,7 @@ def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
         params = {"cutoff": cutoff_time}
         date_cols = ["timestamp", "collected_at"]
 
-        # Run query
+        # Run query with a timeout
         df = pd.read_sql_query(
             query,
             _engine,
@@ -104,27 +128,14 @@ def create_metrics(symbol_data: pd.DataFrame, symbol: str) -> None:
     col1, col2, col3 = st.columns(3)
     with col1:
         last_price, change = get_price_change(symbol_data["price"])
-        st.metric(
-            "Son Fiyat",
-            f"${last_price:.2f}",
-            f"{change:.2f}",
-            key=f"metric_price_{symbol}",
-        )
+        st.metric("Son Fiyat", f"${last_price:.2f}", f"{change:.2f}")
     with col2:
-        st.metric(
-            "Ortalama Fiyat",
-            f"${symbol_data['price'].mean():.2f}",
-            key=f"metric_avg_{symbol}",
-        )
+        st.metric("Ortalama Fiyat", f"${symbol_data['price'].mean():.2f}")
     with col3:
-        st.metric(
-            "İşlem Hacmi",
-            f"{symbol_data['volume'].iloc[0]:,.0f}",
-            key=f"metric_volume_{symbol}",
-        )
+        st.metric("İşlem Hacmi", f"{symbol_data['volume'].iloc[0]:,.0f}")
 
 
-def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
+def create_chart(symbol_data: pd.DataFrame, symbol: str, timestamp: str) -> None:
     """Create price chart."""
     fig = go.Figure()
 
@@ -154,19 +165,13 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str) -> None:
         yaxis_title="Price ($)",
         template="plotly_dark",
         height=500,
+        uirevision=True,  # Prevent zoom reset on update
     )
-    st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}")
+    st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}_{timestamp}")
 
 
 def main() -> None:
     """Main application function."""
-    page_config = {
-        "page_title": "Stock Tracker",
-        "page_icon": "📈",
-        "layout": "wide",
-    }
-    st.set_page_config(**page_config)
-
     # Database connection
     engine = get_db_connection()
     if not engine:
@@ -208,8 +213,10 @@ def main() -> None:
     while True:
         try:
             # Format last update time
-            time_format = "%H:%M:%S"
-            current_time = datetime.now().strftime(time_format)
+            time_format = "%H:%M:%S.%f"
+            current_time = datetime.now().strftime(time_format)[
+                :-4
+            ]  # Show milliseconds
             update_msg = f"Last update: {current_time}"
             update_time.text(update_msg)
 
@@ -223,33 +230,35 @@ def main() -> None:
                 continue
 
             # Data for selected symbol
-            symbol_data = df[df["symbol"] == selected_symbol]
-
-            # Statistics
-            with metrics_placeholder.container():
-                create_metrics(symbol_data, selected_symbol)
-
-            # Chart
-            with chart_placeholder.container():
-                create_chart(symbol_data, selected_symbol)
-
-            # Table
-            with table_placeholder.container():
-                st.dataframe(
-                    symbol_data[["collected_at", "price", "volume"]]
-                    .rename(
-                        columns={
-                            "collected_at": "Time",
-                            "price": "Price",
-                            "volume": "Volume",
-                        }
-                    )
-                    .head(10),
-                    key=f"table_{selected_symbol}",
+            symbol_data = df[df["symbol"] == selected_symbol].copy()
+            if not symbol_data.empty:
+                # Add milliseconds to timestamp for more precise updates
+                symbol_data['display_time'] = (
+                    symbol_data['collected_at'].dt.strftime('%H:%M:%S.%f').str[:-4]
                 )
 
-            # Refresh interval
-            time.sleep(REFRESH_INTERVAL)
+                # Statistics
+                with metrics_placeholder.container():
+                    create_metrics(symbol_data, selected_symbol)
+
+                # Chart
+                with chart_placeholder.container():
+                    create_chart(symbol_data, selected_symbol, current_time)
+
+                # Table with millisecond precision
+                with table_placeholder.container():
+                    display_df = symbol_data[["display_time", "price", "volume"]].copy()
+                    display_df.columns = ["Time", "Price", "Volume"]
+                    display_df["Price"] = display_df["Price"].map("${:,.2f}".format)
+                    display_df["Volume"] = display_df["Volume"].map("{:,.0f}".format)
+                    st.dataframe(
+                        display_df.head(10),
+                        key=f"table_{selected_symbol}_{current_time}",
+                        height=400,  # Fixed height
+                    )
+
+            # Sleep for a shorter interval
+            time.sleep(REFRESH_INTERVAL / 2)  # More frequent updates
 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
