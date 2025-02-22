@@ -1,4 +1,4 @@
-"""WebSocket type stub dosyası."""
+"""WebSocket type stub file."""
 
 from typing import Any, Callable, Optional, TypeVar
 

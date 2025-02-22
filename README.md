@@ -27,28 +27,28 @@ The Stock Tracker is a real-time stock data tracking and visualization tool. It 
 
 ## Features
 
-Merhaba! Bu projede geliştirdiğim temel özellikler şunlar:
+Hi! Here are the main features I've developed in this project:
 
--   **Gerçek Zamanlı Veri Toplama:** Finnhub'ın WebSocket API'si üzerinden anlık hisse fiyatlarını topluyorum. `main.py`'daki `FinnhubWebSocket` sınıfı bu işi yönetiyor. WebSocket ile çalışmak benim için yeni bir deneyimdi ve oldukça öğretici oldu.
+-   **Real-time Data Collection:** I collect real-time stock prices using Finnhub's WebSocket API. The `FinnhubWebSocket` class in `main.py` handles this process. Working with WebSocket was a new experience for me and quite educational.
 
--   **Verileri Saklama:** Topladığım verileri PostgreSQL veritabanında saklıyorum. `src/database/postgres_manager.py`'daki `PostgresManager` sınıfı veritabanı işlemlerini yönetiyor. SQL ve veritabanı yönetimi konusunda kendimi her gün geliştiriyorum.
+-   **Data Storage:** I store all the collected data in a PostgreSQL database. The `PostgresManager` class in `src/database/postgres_manager.py` manages database operations. I'm continuously improving my SQL and database management skills.
 
--   **Gösterge Paneli:** Streamlit ile bir dashboard geliştirdim. İçeriğinde:
-    -   Anlık fiyat grafikleri (Plotly kullanarak)
-    -   Temel metrikler (son fiyat, ortalama fiyat, işlem hacmi)
-    -   Veri tabloları
-    -   Özelleştirilebilir zaman aralığı
-    Tüm dashboard kodlarını `src/visualization/app.py`'de bulabilirsiniz.
+-   **Dashboard:** I developed a dashboard using Streamlit. It includes:
+    -   Real-time price charts (using Plotly)
+    -   Key metrics (latest price, average price, trading volume)
+    -   Data tables
+    -   Customizable time range
+    You can find all the dashboard code in `src/visualization/app.py`.
 
--   **Veri Kalite Kontrolleri:** Verilerin doğruluğunu kontrol etmek için `check_data.py` ile çeşitli analizler yapıyorum. Bu sayede veri kalitesini sürekli izleyebiliyorum.
+-   **Data Quality Checks:** I perform various analyses using `check_data.py` to verify data accuracy. This allows me to continuously monitor data quality.
 
--   **Hız Sınırlama:** Finnhub API limitlerini yönetmek için `src/utils/rate_limiter.py`'da bir `RateLimiter` sınıfı geliştirdim. API kullanımını optimize etmek önemli bir öğrenme deneyimi oldu.
+-   **Rate Limiting:** I developed a `RateLimiter` class in `src/utils/rate_limiter.py` to manage Finnhub API limits. Optimizing API usage has been an important learning experience.
 
--   **Testler:** Kodun güvenilirliğini sağlamak için test süiti ekledim. Testleri `tests` klasöründe bulabilirsiniz. Test yazma konusunda sürekli kendimi geliştiriyorum.
+-   **Tests:** I added a test suite to ensure code reliability. You can find the tests in the `tests` directory. I'm continuously improving my testing skills.
 
--   **CI/CD:** GitHub Actions ile otomatik test sistemi kurdum. Her kod güncellemesinde testler otomatik olarak çalışıyor. CI/CD süreçlerini öğrenmek benim için değerli bir deneyim oldu.
+-   **CI/CD:** I set up an automated testing system using GitHub Actions. Tests run automatically with each code update. Learning CI/CD processes has been a valuable experience.
 
-Not: Bu proje benim data engineering yolculuğumun başlangıcı. Öğrendikçe ve geliştirdikçe projeyi de büyütmeye devam edeceğim.
+Note: This project marks the beginning of my data engineering journey. I'll continue to expand and improve it as I learn and grow.
 
 ## Requirements
 
