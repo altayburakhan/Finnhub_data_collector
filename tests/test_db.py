@@ -7,9 +7,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.database.postgres_manager import PostgresManager, StockData
+from src.database.postgres_manager import PostgresManager, StockData, StockDataDict
 
-StockDataDict = Dict[str, Union[str, float, datetime]]
 InvalidDataDict = Dict[str, Union[str, float, None]]
 
 
@@ -23,7 +22,6 @@ def test_db_connection(db_manager: PostgresManager) -> None:
     assert db_manager.engine is not None, "Engine could not be created"
     assert isinstance(db_manager.Session, sessionmaker), "Session could not be created"
 
-    # Test connection
     with db_manager.engine.connect() as conn:
         result = conn.execute(text("SELECT 1"))
         assert result.scalar() == 1, "Database connection failed"
@@ -40,11 +38,9 @@ def test_insert_stock_data(
         db_manager: PostgresManager fixture
         sample_stock_data: Sample data fixture
     """
-    # Insert data
     result = db_manager.insert_stock_data(sample_stock_data)
     assert result is not None, "Data could not be inserted"
 
-    # Check inserted data
     session_factory = cast(sessionmaker, db_manager.Session)
     session = session_factory()
     try:
@@ -73,19 +69,16 @@ def test_get_latest_records(
         db_manager: PostgresManager fixture
         sample_stock_data: Sample data fixture
     """
-    # Insert test data
     for i in range(5):
         data = sample_stock_data.copy()
-        data["price"] = float(100 + i)  # Different price for each record
+        data["price"] = float(100 + i)
         data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         data["collected_at"] = datetime.now().isoformat()
         result = db_manager.insert_stock_data(data)
         assert result is not None, f"Data could not be inserted: {data}"
 
-    # Get last 3 records
     records = db_manager.get_latest_records(limit=3)
 
-    # Check results
     assert len(records) == 3, "Wrong number of records returned"
     assert records[0].price > records[1].price, (
         f"First price ({records[0].price}) should be greater than "
@@ -108,12 +101,10 @@ def test_bulk_insert(
         db_manager: PostgresManager fixture
         multiple_stock_data: Multiple data fixture
     """
-    # Insert data
     for data in multiple_stock_data:
         result = db_manager.insert_stock_data(data)
         assert result is not None, f"Data could not be inserted: {data}"
 
-    # Check inserted data
     session_factory = cast(sessionmaker, db_manager.Session)
     session = session_factory()
     try:
@@ -135,20 +126,17 @@ def test_error_handling(db_manager: PostgresManager) -> None:
     Args:
         db_manager: PostgresManager fixture
     """
-    # Invalid data with explicit type casting
-    invalid_data: InvalidDataDict = {
-        "symbol": "TEST" * 10,  # Too long symbol
-        "price": "invalid",  # Invalid price type
-        "volume": None,  # Empty volume
-        "timestamp": "invalid",  # Invalid timestamp
-        "collected_at": "now",  # Invalid collection time
+    invalid_data: StockDataDict = {
+        "symbol": "TEST" * 10,
+        "price": "invalid",  # type: ignore
+        "volume": None,  # type: ignore
+        "timestamp": "invalid",
+        "collected_at": "now",
     }
 
-    # Try to insert - using Any to bypass type checking for invalid data test
-    result = db_manager.insert_stock_data(invalid_data)  # type: ignore
+    result = db_manager.insert_stock_data(invalid_data)
     assert result is None, "Invalid data accepted"
 
-    # No record should be in database
     session_factory = cast(sessionmaker, db_manager.Session)
     session = session_factory()
     try:

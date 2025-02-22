@@ -1,14 +1,22 @@
-"""Rate limiter module."""
+"""My helper module for limiting API requests.
+
+I use this to control request rates and prevent exceeding API limits
+by tracking request times and enforcing delays when needed.
+"""
 
 import time
 from typing import List
 
 
 class RateLimiter:
-    """Rate limiter class for API requests."""
+    """My class for controlling API request rates.
+
+    I set maximum requests allowed in a time window and ensure
+    we don't exceed limits by waiting when necessary.
+    """
 
     def __init__(self, max_requests: int, time_window: int) -> None:
-        """Initialize rate limiter.
+        """Initialize rate limiter with request limits.
 
         Args:
             max_requests: Maximum number of requests allowed in time window
@@ -24,22 +32,23 @@ class RateLimiter:
         self.requests: List[float] = []
 
     def wait_if_needed(self) -> None:
-        """Wait if rate limit is exceeded."""
+        """Check and wait if rate limit is reached.
+
+        Before making a new request, I check if we've hit the limit.
+        If we have, I wait until enough time has passed since the
+        oldest request.
+        """
         now = time.time()
 
-        # Remove old requests
         self.requests = [
             req_time for req_time in self.requests if now - req_time <= self.time_window
         ]
 
-        # If we've hit the limit, wait
         if len(self.requests) >= self.max_requests:
             oldest_request = self.requests[0]
             wait_time = oldest_request + self.time_window - now
             if wait_time > 0:
                 time.sleep(wait_time)
-                # Update current time after sleep
                 now = time.time()
 
-        # Add current request
         self.requests.append(now)

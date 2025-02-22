@@ -8,10 +8,8 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 
-# Log configuration
 logger = logging.getLogger(__name__)
 
-# Load .env file
 load_dotenv()
 
 
@@ -47,13 +45,10 @@ def test_connection(engine: Engine) -> Tuple[bool, str]:
         Tuple[bool, str]: (Success, Message)
     """
     try:
-        # Test connection
         with engine.connect() as conn:
-            # Get PostgreSQL version
             result = conn.execute(text("SELECT version();"))
             version = result.scalar()
 
-            # Check table count
             result = conn.execute(
                 text(
                     """
@@ -112,18 +107,15 @@ def check_table_exists(engine: Engine, table_name: str) -> bool:
 
 def main() -> None:
     """Main application function."""
-    # Get database connection
     engine = get_db_connection()
     if not engine:
         logger.error("Database connection could not be created!")
         return
 
-    # Test connection
     success, message = test_connection(engine)
     if success:
         logger.info(message)
 
-        # Check if stock_data table exists
         if check_table_exists(engine, "stock_data"):
             logger.info("stock_data table exists")
         else:

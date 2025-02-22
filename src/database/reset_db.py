@@ -8,10 +8,8 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Engine
 
-# Log configuration
 logger = logging.getLogger(__name__)
 
-# Load .env file
 load_dotenv()
 
 
@@ -47,7 +45,6 @@ def reset_database(engine: Engine) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Close existing connections
         with engine.connect() as conn:
             conn.execute(
                 text(
@@ -61,12 +58,10 @@ def reset_database(engine: Engine) -> bool:
             )
             conn.commit()
 
-        # Drop tables
         with engine.connect() as conn:
             conn.execute(text("DROP TABLE IF EXISTS stock_data CASCADE;"))
             conn.commit()
 
-        # Create new table
         with engine.connect() as conn:
             conn.execute(
                 text(
@@ -83,7 +78,6 @@ def reset_database(engine: Engine) -> bool:
                 )
             )
 
-            # Create indexes
             conn.execute(
                 text(
                     """

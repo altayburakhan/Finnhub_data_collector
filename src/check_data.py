@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 from src.database.postgres_manager import PostgresManager
 
-# Log configuration
 logging.basicConfig(
     level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
@@ -122,7 +121,6 @@ def check_data_quality(db: PostgresManager) -> List[str]:
     try:
         session = db._get_session()
         try:
-            # Null value check
             null_check = session.execute(
                 text(
                     """
@@ -138,7 +136,6 @@ def check_data_quality(db: PostgresManager) -> List[str]:
             if null_count > 0:
                 issues.append(f"Null count: {null_count}")
 
-            # Negative price check
             negative_price = session.execute(
                 text(
                     """
@@ -151,7 +148,6 @@ def check_data_quality(db: PostgresManager) -> List[str]:
             if negative_price.scalar() > 0:
                 issues.append("Negative price values found!")
 
-            # Data frequency check
             frequency_check = session.execute(
                 text(
                     """
@@ -173,7 +169,7 @@ def check_data_quality(db: PostgresManager) -> List[str]:
                 )
             )
             avg_seconds = frequency_check.scalar() or 0
-            if avg_seconds > 5:  # If there is more than 5 seconds gap
+            if avg_seconds > 5:
                 issues.append(
                     f"Average data collection frequency is too low: "
                     f"{avg_seconds:.1f} seconds"
@@ -206,7 +202,6 @@ def get_missing_periods(
     try:
         session = db._get_session()
         try:
-            # Sorted time stamps for each symbol
             symbols = session.execute(
                 text("SELECT DISTINCT symbol FROM stock_data;")
             ).scalars()
@@ -248,17 +243,14 @@ def main() -> None:
     """Main application function."""
     db = PostgresManager()
 
-    # Get statistics
     stats = get_data_stats(db)
     if stats:
         logger.info("\nData Statistics:")
         for key, value in stats.items():
             logger.info(f"{key}: {value}")
 
-    # Check data distribution
     check_data_distribution(db)
 
-    # Data quality check
     issues = check_data_quality(db)
     if issues:
         logger.warning("\nDetected Issues:")
@@ -267,7 +259,6 @@ def main() -> None:
     else:
         logger.info("\nData quality checks successful!")
 
-    # Check missing periods
     missing_periods = get_missing_periods(db)
     if missing_periods:
         logger.warning("\nMissing Data Periods:")

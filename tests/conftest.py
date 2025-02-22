@@ -13,7 +13,6 @@ from sqlalchemy.pool import StaticPool
 
 from src.database.postgres_manager import Base, PostgresManager, StockData
 
-# Load .env file for test database configuration
 load_dotenv()
 
 
@@ -47,7 +46,7 @@ def engine(db_url: str) -> Engine:
     """
     return create_engine(
         db_url,
-        poolclass=StaticPool,  # Use static pool for tests
+        poolclass=StaticPool,
     )
 
 
@@ -83,7 +82,6 @@ def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
     transaction = connection.begin()
     session = Session(bind=connection)
 
-    # Clean the database before each test
     try:
         session.execute(text("TRUNCATE TABLE stock_data RESTART IDENTITY CASCADE"))
         session.commit()
@@ -147,7 +145,7 @@ def multiple_stock_data() -> List[Dict]:
     return [
         {
             "symbol": symbol,
-            "price": 150.0,  # Same price for all stocks in test
+            "price": 150.0,
             "volume": 1000000.0,
             "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
             "collected_at": now.isoformat(),

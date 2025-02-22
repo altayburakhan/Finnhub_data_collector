@@ -26,7 +26,7 @@ def test_rate_limiter_basic(rate_limiter: RateLimiter) -> None:
     Args:
         rate_limiter: RateLimiter fixture'ı
     """
-    # First two requests should pass immediately
+
     start = time.time()
     rate_limiter.wait_if_needed()
     rate_limiter.wait_if_needed()
@@ -42,11 +42,10 @@ def test_rate_limiter_throttling(rate_limiter: RateLimiter) -> None:
     Args:
         rate_limiter: RateLimiter fixture'ı
     """
-    # Make first two requests
+
     rate_limiter.wait_if_needed()
     rate_limiter.wait_if_needed()
 
-    # Third request should wait
     start = time.time()
     rate_limiter.wait_if_needed()
     elapsed = time.time() - start
@@ -61,14 +60,12 @@ def test_rate_limiter_window_reset(rate_limiter: RateLimiter) -> None:
     Args:
         rate_limiter: RateLimiter fixture'ı
     """
-    # Make first two requests
+
     rate_limiter.wait_if_needed()
     rate_limiter.wait_if_needed()
 
-    # Wait for time window reset
     time.sleep(1.1)
 
-    # New request should pass immediately
     start = time.time()
     rate_limiter.wait_if_needed()
     elapsed = time.time() - start
@@ -88,12 +85,10 @@ def test_rate_limiter_continuous_requests(rate_limiter: RateLimiter) -> None:
     request_times: List[float] = []
     start_time = time.time()
 
-    # Make 5 requests and record times
     for _ in range(5):
         rate_limiter.wait_if_needed()
         request_times.append(time.time() - start_time)
 
-    # Check time differences between requests
     for i in range(2, len(request_times)):
         time_diff = request_times[i] - request_times[i - 2]
         assert (
@@ -103,14 +98,13 @@ def test_rate_limiter_continuous_requests(rate_limiter: RateLimiter) -> None:
 
 def test_rate_limiter_edge_cases() -> None:
     """Test for edge cases."""
-    # Trying to start with negative values
+
     with pytest.raises(ValueError):
         RateLimiter(max_requests=-1, time_window=1)
 
     with pytest.raises(ValueError):
         RateLimiter(max_requests=1, time_window=-1)
 
-    # Trying to start with zero values
     with pytest.raises(ValueError):
         RateLimiter(max_requests=0, time_window=1)
 

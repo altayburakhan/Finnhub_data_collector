@@ -13,19 +13,15 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
 
-# Constants
-CACHE_TTL = 1  # seconds
-REFRESH_INTERVAL = 1  # seconds
+CACHE_TTL = 1
+REFRESH_INTERVAL = 1
 DEFAULT_HOURS = 1
 MAX_HOURS = 24
 
-# Logging configuration
 logger = logging.getLogger(__name__)
 
-# Load .env file
 load_dotenv()
 
-# Configure page to prevent auto-scrolling
 st.set_page_config(
     page_title="Stock Tracker",
     page_icon="📈",
@@ -33,7 +29,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Apply custom CSS to prevent auto-scrolling
 st.markdown(
     """
     <style>
@@ -54,14 +49,12 @@ st.markdown(
 def get_db_connection() -> Optional[Engine]:
     """Create database connection."""
     try:
-        # Create database URL
         user = os.getenv("POSTGRES_USER")
         pwd = os.getenv("POSTGRES_PASSWORD")
         host = os.getenv("POSTGRES_HOST")
         port = os.getenv("POSTGRES_PORT")
         db = os.getenv("POSTGRES_DB")
 
-        # Create URL
         url = f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
         return create_engine(url)
     except Exception as e:
@@ -75,13 +68,11 @@ def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
     try:
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        # Split SQL query into parts
         fields = ["symbol", "price", "volume", "timestamp", "collected_at"]
         select_fields = ", ".join(fields)
         window_start = "AVG(price) OVER (PARTITION BY symbol"
         window_end = "ORDER BY collected_at "
 
-        # Join query parts
         select_base = f"SELECT {select_fields}"
         window_full = f"{window_start} {window_end}"
         select_clause = f"{select_base}, {window_full}"
@@ -96,14 +87,11 @@ def load_data(_engine: Engine, hours: int = DEFAULT_HOURS) -> pd.DataFrame:
             "ORDER BY collected_at DESC"
         )
 
-        # Join query parts
         query = select_clause + window_clause + from_clause
 
-        # Prepare parameters
         params = {"cutoff": cutoff_time}
         date_cols = ["timestamp", "collected_at"]
 
-        # Run query with a timeout
         df = pd.read_sql_query(
             query,
             _engine,
@@ -139,7 +127,6 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str, timestamp: str) -> None
     """Create price chart."""
     fig = go.Figure()
 
-    # Price line
     price_trace = go.Scatter(
         x=symbol_data["collected_at"],
         y=symbol_data["price"],
@@ -149,7 +136,6 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str, timestamp: str) -> None
     )
     fig.add_trace(price_trace)
 
-    # Moving average line
     ma_trace = go.Scatter(
         x=symbol_data["collected_at"],
         y=symbol_data["price_ma_5"],
@@ -165,23 +151,20 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str, timestamp: str) -> None
         yaxis_title="Price ($)",
         template="plotly_dark",
         height=500,
-        uirevision=True,  # Prevent zoom reset on update
+        uirevision=True,
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}_{timestamp}")
 
 
 def main() -> None:
     """Main application function."""
-    # Database connection
     engine = get_db_connection()
     if not engine:
         st.error("Database connection failed!")
         return
 
-    # Main title
     st.title("📊 Stock Tracker Dashboard")
 
-    # Sidebar controls
     with st.sidebar:
         slider_params = {
             "label": "Data Range (Hours)",
@@ -193,34 +176,26 @@ def main() -> None:
         hours = st.slider(**slider_params)
         update_time = st.empty()
 
-    # Create placeholders
     metrics_placeholder = st.empty()
     chart_placeholder = st.empty()
     table_placeholder = st.empty()
 
-    # Load first data
     df = load_data(engine, hours)
     if df.empty:
         st.warning("Data not found!")
         return
 
-    # Symbol selection - outside loop
     symbols = sorted(df["symbol"].unique())
     symbol_container = st.sidebar.empty()
     selected_symbol = symbol_container.selectbox("Stock", symbols, key="symbol_select")
 
-    # Data loading and update loop
     while True:
         try:
-            # Format last update time
             time_format = "%H:%M:%S.%f"
-            current_time = datetime.now().strftime(time_format)[
-                :-4
-            ]  # Show milliseconds
+            current_time = datetime.now().strftime(time_format)[:-4]
             update_msg = f"Last update: {current_time}"
             update_time.text(update_msg)
 
-            # Clear cache and reload data
             st.cache_data.clear()
             df = load_data(engine, hours)
 
@@ -229,23 +204,18 @@ def main() -> None:
                 time.sleep(REFRESH_INTERVAL)
                 continue
 
-            # Data for selected symbol
             symbol_data = df[df["symbol"] == selected_symbol].copy()
             if not symbol_data.empty:
-                # Add milliseconds to timestamp for more precise updates
                 symbol_data['display_time'] = (
                     symbol_data['collected_at'].dt.strftime('%H:%M:%S.%f').str[:-4]
                 )
 
-                # Statistics
                 with metrics_placeholder.container():
                     create_metrics(symbol_data, selected_symbol)
 
-                # Chart
                 with chart_placeholder.container():
                     create_chart(symbol_data, selected_symbol, current_time)
 
-                # Table with millisecond precision
                 with table_placeholder.container():
                     display_df = symbol_data[["display_time", "price", "volume"]].copy()
                     display_df.columns = ["Time", "Price", "Volume"]
@@ -254,11 +224,10 @@ def main() -> None:
                     st.dataframe(
                         display_df.head(10),
                         key=f"table_{selected_symbol}_{current_time}",
-                        height=400,  # Fixed height
+                        height=400,
                     )
 
-            # Sleep for a shorter interval
-            time.sleep(REFRESH_INTERVAL / 2)  # More frequent updates
+            time.sleep(REFRESH_INTERVAL / 2)
 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
