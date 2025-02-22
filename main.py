@@ -178,8 +178,10 @@ class FinnhubWebSocket:
         while True:
             try:
                 now = time.time()
-                if (now - self.last_buffer_process_time >= BUFFER_TIMEOUT or
-                        self.buffer.qsize() >= BUFFER_SIZE):
+                if (
+                    now - self.last_buffer_process_time >= BUFFER_TIMEOUT
+                    or self.buffer.qsize() >= BUFFER_SIZE
+                ):
                     self.process_buffer()
                 time.sleep(0.1)  # Small delay to prevent CPU overuse
             except Exception as e:
