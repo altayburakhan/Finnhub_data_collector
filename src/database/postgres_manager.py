@@ -13,8 +13,7 @@ from typing import Dict, List, Optional, TypeVar, Union
 from dotenv import load_dotenv
 from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine, desc
 from sqlalchemy.engine.base import Engine
-from sqlalchemy.ext.declarative import DeclarativeBase
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 load_dotenv()
