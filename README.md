@@ -198,18 +198,3 @@ The project uses GitHub Actions for Continuous Integration. The CI workflow is d
 -   Installing dependencies
 -   Running tests
 
-## Rate Limiting
-
-The project implements rate limiting to ensure we don't exceed Finnhub's API limits:
-
--   WebSocket connection: Maximum 20 requests per minute
--   Automatic reconnection with exponential backoff
--   Rate limit error handling (HTTP 429)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests, report bugs, or suggest new features.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
