@@ -126,12 +126,39 @@ Note: As my first data engineering project, I'm continuously learning and lookin
 
 ```
 stock-tracker/
-├── src/                        # Source code
-│   ├── database/              # Database operations
-│   ├── utils/                 # Utility functions
-│   ├── visualization/         # Dashboard
-│   └── main.py               # Main application
-└── tests/                     # Test suite
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # CI pipeline configuration
+├── .gitignore                  # Git ignore rules
+├── .pre-commit-config.yaml     # Pre-commit hook configuration
+├── .python-version             # Python version specification
+├── README.md                   # Project documentation
+├── mypy.ini                    # Mypy configuration
+├── pyproject.toml              # Poetry configuration and dependencies
+├── requirements.txt            # Alternative dependency specification
+├── setup.py                    # Setup configuration
+├── src/                        # Source code directory
+│   ├── __init__.py            # Package initialization
+│   ├── check_data.py          # Data quality check module
+│   ├── database/              # Database related modules
+│   │   ├── __init__.py        # Package initialization
+│   │   ├── postgres_manager.py # PostgreSQL management
+│   │   ├── reset_db.py        # Database reset utility
+│   │   └── test_connection.py # Connection testing
+│   ├── types/                 # Type stub files
+│   │   └── websocket.pyi      # WebSocket type definitions
+│   ├── utils/                 # Utility modules
+│   │   ├── __init__.py        # Package initialization
+│   │   └── rate_limiter.py    # Rate limiting implementation
+│   ├── visualization/         # Visualization modules
+│   │   ├── __init__.py        # Package initialization
+│   │   └── app.py             # Streamlit dashboard
+│   └── main.py                # Main application entry point
+└── tests/                     # Test suite directory
+    ├── __init__.py            # Test package initialization
+    ├── conftest.py            # Test configuration and fixtures
+    ├── test_db.py             # Database tests
+    └── test_rate_limiter.py   # Rate limiter tests
 ```
 
 ## Testing
