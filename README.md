@@ -28,7 +28,6 @@ This is a real-time stock tracking application that:
 
 ![Stock Tracker Dashboard](https://i.imgur.com/JQZPrWu.png)
 
-*Note: This is a preview of the dashboard. You'll need your own Finnhub API key to collect real-time data.*
 
 ## Features
 
@@ -135,26 +134,6 @@ Note: As my first data engineering project, I'm continuously learning and lookin
     # Check data quality
     python src/check_data.py
     ```
-
-## Testing Without Finnhub API
-
-If you don't have a Finnhub API key, you can still test the dashboard with sample data:
-
-1. Make sure PostgreSQL is running
-2. Connect to your database and run:
-   ```sql
-   INSERT INTO stock_data (symbol, price, volume, timestamp, collected_at)
-   VALUES 
-   ('AAPL', 185.25, 1000000, NOW(), NOW()),
-   ('MSFT', 410.34, 750000, NOW(), NOW()),
-   ('AMZN', 178.75, 500000, NOW(), NOW()),
-   ('GOOGL', 142.56, 300000, NOW(), NOW()),
-   ('META', 475.89, 450000, NOW(), NOW());
-   ```
-3. Launch the dashboard:
-   ```bash
-   streamlit run src/visualization/app.py
-   ```
 
 ## Project Structure
 
