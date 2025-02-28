@@ -24,6 +24,12 @@ This is a real-time stock tracking application that:
 2. Stores the data in PostgreSQL
 3. Visualizes it through an interactive dashboard
 
+## Dashboard Preview
+
+![Stock Tracker Dashboard](https://i.imgur.com/JQZPrWu.png)
+
+*Note: This is a preview of the dashboard. You'll need your own Finnhub API key to collect real-time data.*
+
 ## Features
 
 Here are the main components I've built:
@@ -70,29 +76,37 @@ Note: As my first data engineering project, I'm continuously learning and lookin
 3.  Clone this repository:
     ```bash
     git clone https://github.com/altayburakhan/Finnhub_data_collector.git
-    cd stock-tracker
+    cd Finnhub_data_collector
     ```
 
 4.  Install dependencies:
     ```bash
     poetry install
+    poetry shell  # Activate the virtual environment
     ```
 
 5.  Set up environment variables:
     ```bash
     cp .env.example .env
     ```
-    Configure your `.env` file:
+    Configure your `.env` file with your database credentials and Finnhub API key:
     ```
-    POSTGRES_USER=your_username
-    POSTGRES_PASSWORD=your_password
+    FINNHUB_API_KEY=your_api_key_here
+    
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_NAME=postgres
+    DB_USER=postgres
+    DB_PASSWORD=your_password_here
+    
     POSTGRES_HOST=localhost
     POSTGRES_PORT=5432
-    POSTGRES_DB=stockdb
-    FINNHUB_API_KEY=your_api_key
+    POSTGRES_DB=postgres
+    POSTGRES_USER=postgres
+    POSTGRES_PASSWORD=your_password_here
     ```
 
-6.  Install pre-commit hooks:
+6.  Install pre-commit hooks (optional):
     ```bash
     pre-commit install
     ```
@@ -101,31 +115,51 @@ Note: As my first data engineering project, I'm continuously learning and lookin
 
 1.  Start data collection:
     ```bash
-    poetry run python main.py
+    python main.py
     ```
 
 2.  Launch the dashboard:
     ```bash
-    poetry run streamlit run src/visualization/app.py
+    streamlit run src/visualization/app.py
     ```
     Access it at `http://localhost:8501`
 
 3.  Database management:
     ```bash
     # Reset database (caution: deletes existing data)
-    poetry run python src/database/reset_db.py
+    python src/database/reset_db.py
 
     # Test database connection
-    poetry run python src/database/test_connection.py
+    python src/database/test_connection.py
 
     # Check data quality
-    poetry run python src/check_data.py
+    python src/check_data.py
     ```
+
+## Testing Without Finnhub API
+
+If you don't have a Finnhub API key, you can still test the dashboard with sample data:
+
+1. Make sure PostgreSQL is running
+2. Connect to your database and run:
+   ```sql
+   INSERT INTO stock_data (symbol, price, volume, timestamp, collected_at)
+   VALUES 
+   ('AAPL', 185.25, 1000000, NOW(), NOW()),
+   ('MSFT', 410.34, 750000, NOW(), NOW()),
+   ('AMZN', 178.75, 500000, NOW(), NOW()),
+   ('GOOGL', 142.56, 300000, NOW(), NOW()),
+   ('META', 475.89, 450000, NOW(), NOW());
+   ```
+3. Launch the dashboard:
+   ```bash
+   streamlit run src/visualization/app.py
+   ```
 
 ## Project Structure
 
 ```
-stock-tracker/
+Finnhub_data_collector/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml              # CI pipeline configuration
@@ -137,6 +171,7 @@ stock-tracker/
 ├── pyproject.toml              # Poetry configuration and dependencies
 ├── requirements.txt            # Alternative dependency specification
 ├── setup.py                    # Setup configuration
+├── main.py                     # Main application entry point
 ├── src/                        # Source code directory
 │   ├── __init__.py            # Package initialization
 │   ├── check_data.py          # Data quality check module
@@ -153,7 +188,6 @@ stock-tracker/
 │   ├── visualization/         # Visualization modules
 │   │   ├── __init__.py        # Package initialization
 │   │   └── app.py             # Streamlit dashboard
-│   └── main.py                # Main application entry point
 └── tests/                     # Test suite directory
     ├── __init__.py            # Test package initialization
     ├── conftest.py            # Test configuration and fixtures
@@ -165,7 +199,7 @@ stock-tracker/
 
 Run tests with:
 ```bash
-poetry run pytest
+pytest
 ```
 
 ## Future Improvements

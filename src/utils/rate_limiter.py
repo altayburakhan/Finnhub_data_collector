@@ -1,54 +1,44 @@
-"""My helper module for limiting API requests.
+"""Rate limiter implementation for API requests.
 
-I use this to control request rates and prevent exceeding API limits
-by tracking request times and enforcing delays when needed.
+This module provides rate limiting functionality to prevent
+exceeding API rate limits.
 """
 
+import logging
 import time
-from typing import List
+from collections import deque
+from typing import Deque
 
+logger = logging.getLogger(__name__)
 
 class RateLimiter:
-    """My class for controlling API request rates.
-
-    I set maximum requests allowed in a time window and ensure
-    we don't exceed limits by waiting when necessary.
-    """
+    """Implements rate limiting for API requests."""
 
     def __init__(self, max_requests: int, time_window: int) -> None:
-        """Initialize rate limiter with request limits.
+        """Initialize rate limiter.
 
         Args:
-            max_requests: Maximum number of requests allowed in time window
+            max_requests: Maximum number of requests allowed
             time_window: Time window in seconds
         """
-        if max_requests <= 0:
-            raise ValueError("max_requests must be positive")
-        if time_window <= 0:
-            raise ValueError("time_window must be positive")
-
-        self.max_requests = max_requests
-        self.time_window = time_window
-        self.requests: List[float] = []
+        self.max_requests: int = max_requests
+        self.time_window: int = time_window
+        self.requests: Deque[float] = deque()
 
     def wait_if_needed(self) -> None:
-        """Check and wait if rate limit is reached.
+        """Check and wait if rate limit would be exceeded."""
+        current_time = time.time()
 
-        Before making a new request, I check if we've hit the limit.
-        If we have, I wait until enough time has passed since the
-        oldest request.
-        """
-        now = time.time()
+        # Remove old requests outside the time window
+        while self.requests and current_time - self.requests[0] >= self.time_window:
+            self.requests.popleft()
 
-        self.requests = [
-            req_time for req_time in self.requests if now - req_time <= self.time_window
-        ]
-
+        # If at rate limit, wait until oldest request expires
         if len(self.requests) >= self.max_requests:
-            oldest_request = self.requests[0]
-            wait_time = oldest_request + self.time_window - now
+            wait_time = self.requests[0] + self.time_window - current_time
             if wait_time > 0:
+                logger.debug(f"Rate limit reached, waiting {wait_time:.2f} seconds")
                 time.sleep(wait_time)
-                now = time.time()
 
-        self.requests.append(now)
+        # Add current request
+        self.requests.append(current_time)

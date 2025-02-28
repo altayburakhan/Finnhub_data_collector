@@ -153,7 +153,7 @@ def create_chart(symbol_data: pd.DataFrame, symbol: str, timestamp: str) -> None
         height=500,
         uirevision=True,
     )
-    st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}_{timestamp}")
+    st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}")
 
 
 def main() -> None:
@@ -171,10 +171,19 @@ def main() -> None:
             "min_value": 1,
             "max_value": MAX_HOURS,
             "value": DEFAULT_HOURS,
-            "key": "time_slider",
+            "key": "hours_slider"
         }
         hours = st.slider(**slider_params)
         update_time = st.empty()
+
+    # Use session state to store a counter for unique keys
+    if 'counter' not in st.session_state:
+        st.session_state.counter = 0
+    
+    # Increment counter on each iteration
+    def get_unique_key():
+        st.session_state.counter += 1
+        return str(st.session_state.counter)
 
     metrics_placeholder = st.empty()
     chart_placeholder = st.empty()
@@ -196,6 +205,9 @@ def main() -> None:
             update_msg = f"Last update: {current_time}"
             update_time.text(update_msg)
 
+            # Get a unique key for this iteration
+            unique_key = get_unique_key()
+
             st.cache_data.clear()
             df = load_data(engine, hours)
 
@@ -214,7 +226,36 @@ def main() -> None:
                     create_metrics(symbol_data, selected_symbol)
 
                 with chart_placeholder.container():
-                    create_chart(symbol_data, selected_symbol, current_time)
+                    # Use the unique key for this chart
+                    fig = go.Figure()
+
+                    price_trace = go.Scatter(
+                        x=symbol_data["collected_at"],
+                        y=symbol_data["price"],
+                        mode="lines",
+                        name="Price",
+                        line=dict(color="#2ecc71", width=2),
+                    )
+                    fig.add_trace(price_trace)
+
+                    ma_trace = go.Scatter(
+                        x=symbol_data["collected_at"],
+                        y=symbol_data["price_ma_5"],
+                        mode="lines",
+                        name="5dk MA",
+                        line=dict(color="#3498db", width=1, dash="dash"),
+                    )
+                    fig.add_trace(ma_trace)
+
+                    fig.update_layout(
+                        title=f"{selected_symbol} Price Chart",
+                        xaxis_title="Time",
+                        yaxis_title="Price ($)",
+                        template="plotly_dark",
+                        height=500,
+                        uirevision=True,
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{unique_key}")
 
                 with table_placeholder.container():
                     display_df = symbol_data[["display_time", "price", "volume"]].copy()
@@ -223,8 +264,8 @@ def main() -> None:
                     display_df["Volume"] = display_df["Volume"].map("{:,.0f}".format)
                     st.dataframe(
                         display_df.head(10),
-                        key=f"table_{selected_symbol}_{current_time}",
                         height=400,
+                        key=f"table_{unique_key}"
                     )
 
             time.sleep(REFRESH_INTERVAL / 2)

@@ -1,5 +1,7 @@
 # Environment variables
 .env
+# But keep the example file
+!.env.example
 
 # Python
 __pycache__/
@@ -28,7 +30,6 @@ wheels/
 venv/
 ENV/
 .venv/
-.env
 
 # IDE
 .idea/
@@ -63,9 +64,6 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Poetry
-poetry.lock
 
 # Jupyter Notebook
 .ipynb_checkpoints

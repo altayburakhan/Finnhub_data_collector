@@ -1,200 +1,122 @@
-"""My PostgreSQL database management module.
+"""PostgreSQL database manager for stock data.
 
-This is where I handle all database operations using SQLAlchemy ORM.
-It's my first time using an ORM, and I've learned a lot about
-database management through this project.
+This module handles all database operations including connection
+management and data insertion.
 """
 
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, TypeVar, Union
+from typing import Dict, Optional, Union
 
+import psycopg2
 from dotenv import load_dotenv
-from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine, desc
-from sqlalchemy.engine.base import Engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from psycopg2 import Error as PostgresError
+from psycopg2.extensions import connection, cursor
 
-logger = logging.getLogger(__name__)
+# Load environment variables
 load_dotenv()
 
-
-class Base(DeclarativeBase):
-    """Base class for SQLAlchemy models."""
-
-    pass
-
-
-T = TypeVar("T", bound=Session)
-SessionFactory = sessionmaker[T]
-
-StockDataDict = Dict[str, Union[str, float, datetime]]
-
-
-class StockData(Base):
-    """My model class for storing stock data.
-
-    Each row represents a trade with important information like
-    symbol, price, volume, and timestamps.
-    """
-
-    __tablename__ = "stock_data"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(10), nullable=False, index=True)
-    price = Column(Float, nullable=False)
-    volume = Column(Float)
-    timestamp = Column(DateTime, nullable=False, index=True)
-    collected_at = Column(DateTime, nullable=False)
-
-    def __init__(self, **kwargs: Union[str, float, datetime, None]) -> None:
-        """Initialize the model with provided values."""
-        super().__init__(**kwargs)
-
-    def __repr__(self) -> str:
-        """Return string representation of the model."""
-        return (
-            f"<StockData(symbol='{self.symbol}', "
-            f"price={self.price}, "
-            f"timestamp='{self.timestamp}')>"
-        )
-
+logger = logging.getLogger(__name__)
 
 class PostgresManager:
-    """My main class for managing database operations.
-
-    I handle all core database operations here, including connection
-    management, data insertion, and querying.
-    """
+    """Manages PostgreSQL database operations."""
 
     def __init__(self) -> None:
-        """Set up database connection and session factory."""
-        self.engine: Optional[Engine] = None
-        self._session_factory: Optional[sessionmaker[Session]] = None
-        self.Session: Optional[sessionmaker[Session]] = None
-        self.setup_connection()
+        """Initialize database connection parameters."""
+        self.host: str = os.getenv("DB_HOST", "localhost")
+        self.port: str = os.getenv("DB_PORT", "5432")
+        self.dbname: str = os.getenv("DB_NAME", "postgres")
+        self.user: str = os.getenv("DB_USER", "postgres")
+        self.password: str = os.getenv("DB_PASSWORD", "")
+        self.conn: Optional[connection] = None
+        self.cur: Optional[cursor] = None
+        self.create_table()
 
-    def setup_connection(self) -> None:
-        """Establish database connection and create tables."""
+    def connect(self) -> None:
+        """Establish database connection."""
         try:
-            db_url = (
-                f"postgresql://{os.getenv('POSTGRES_USER')}:"
-                f"{os.getenv('POSTGRES_PASSWORD')}@"
-                f"{os.getenv('POSTGRES_HOST')}:"
-                f"{os.getenv('POSTGRES_PORT')}/"
-                f"{os.getenv('POSTGRES_DB')}"
+            self.conn = psycopg2.connect(
+                host=self.host,
+                port=self.port,
+                dbname=self.dbname,
+                user=self.user,
+                password=self.password
             )
-            self.engine = create_engine(db_url)
-            self._session_factory = sessionmaker(bind=self.engine)
-            self.Session = self._session_factory
-            Base.metadata.create_all(self.engine)
-            logger.info("PostgreSQL connection established successfully")
-        except Exception as e:
-            logger.error(f"Database connection error: {e}")
+            self.cur = self.conn.cursor()
+            logger.info("Successfully connected to PostgreSQL database")
+        except PostgresError as e:
+            logger.error(f"Error connecting to PostgreSQL database: {e}")
             raise
 
-    def _get_session(self) -> Session:
-        """Create a new database session."""
-        if not self._session_factory:
-            raise RuntimeError("Database connection not established")
-        return self._session_factory()
+    def create_table(self) -> None:
+        """Create stock data table if it doesn't exist."""
+        try:
+            self.connect()
+            if self.cur:
+                self.cur.execute("""
+                    CREATE TABLE IF NOT EXISTS stock_data (
+                        id SERIAL PRIMARY KEY,
+                        symbol VARCHAR(10) NOT NULL,
+                        price DECIMAL(10,2) NOT NULL,
+                        volume DECIMAL(15,2) NOT NULL,
+                        timestamp TIMESTAMP NOT NULL,
+                        collected_at TIMESTAMP NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_symbol_timestamp 
+                    ON stock_data(symbol, timestamp);
+                """)
+                if self.conn:
+                    self.conn.commit()
+                logger.info("Stock data table created/verified successfully")
+        except PostgresError as e:
+            logger.error(f"Error creating table: {e}")
+            raise
+        finally:
+            self.close()
 
-    def insert_stock_data(self, data: StockDataDict) -> Optional[StockData]:
-        """Insert stock data into the database.
+    def insert_stock_data(
+        self, data: Dict[str, Union[str, float, datetime]]
+    ) -> bool:
+        """Insert stock data into database.
 
         Args:
-            data: Data dictionary to insert
-                Required fields:
-                - symbol: str
-                - price: float
-                - volume: float
-                - timestamp: str (format: '%Y-%m-%d %H:%M:%S')
-                - collected_at: str (ISO format)
+            data: Dictionary containing stock data
 
         Returns:
-            Optional[StockData]: Inserted data object or None if failed
+            bool: True if insertion successful, False otherwise
         """
-        session = self._get_session()
         try:
-            if not isinstance(data.get("symbol"), str):
-                raise ValueError("Symbol must be a string")
-            if (
-                not isinstance(data.get("price"), (int, float))
-                and not str(data.get("price", "")).replace(".", "").isdigit()
-            ):
-                raise ValueError("Price must be a number")
-            if data.get("volume") is not None and not isinstance(
-                data.get("volume"), (int, float)
-            ):
-                raise ValueError("Volume must be a number or None")
-
-            symbol = str(data["symbol"])
-            if len(symbol) > 10:
-                raise ValueError("Symbol length must be 10 characters or less")
-
-            try:
-                price = float(str(data["price"]))
-            except (ValueError, TypeError):
-                raise ValueError("Invalid price format")
-
-            volume = None
-            if data.get("volume") is not None:
-                try:
-                    volume = float(str(data["volume"]))
-                except (ValueError, TypeError):
-                    raise ValueError("Invalid volume format")
-
-            timestamp_str = str(data["timestamp"])
-            collected_at_str = str(data["collected_at"])
-
-            try:
-                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                raise ValueError("Invalid timestamp format")
-
-            try:
-                collected_at = datetime.fromisoformat(collected_at_str)
-            except ValueError:
-                raise ValueError("Invalid collected_at format")
-
-            stock_data = StockData(
-                symbol=symbol,
-                price=price,
-                volume=volume,
-                timestamp=timestamp,
-                collected_at=collected_at,
-            )
-
-            session.add(stock_data)
-            session.commit()
-
-            logger.info(f"Data saved successfully: {symbol}, ID: {stock_data.id}")
-            return stock_data
-
-        except Exception as e:
-            logger.error(f"Data insertion error: {e}")
-            session.rollback()
-            return None
+            self.connect()
+            if self.cur:
+                self.cur.execute("""
+                    INSERT INTO stock_data 
+                    (symbol, price, volume, timestamp, collected_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    data["symbol"],
+                    data["price"],
+                    data["volume"],
+                    data["timestamp"],
+                    data["collected_at"]
+                ))
+                if self.conn:
+                    self.conn.commit()
+                return True
+        except PostgresError as e:
+            logger.error(f"Error inserting data: {e}")
+            if self.conn:
+                self.conn.rollback()
+            return False
         finally:
-            session.close()
+            self.close()
 
-    def get_latest_records(self, limit: int = 5) -> List[StockData]:
-        """Get the most recent records from the database.
-
-        Args:
-            limit: Number of records to retrieve
-
-        Returns:
-            List[StockData]: List of StockData objects
-        """
-        session = self._get_session()
+    def close(self) -> None:
+        """Close database connection and cursor."""
         try:
-            records = (
-                session.query(StockData)
-                .order_by(desc(StockData.collected_at))
-                .limit(limit)
-                .all()
-            )
-            return list(records)
-        finally:
-            session.close()
+            if self.cur:
+                self.cur.close()
+            if self.conn:
+                self.conn.close()
+        except PostgresError as e:
+            logger.error(f"Error closing database connection: {e}")
