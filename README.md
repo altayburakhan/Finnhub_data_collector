@@ -4,14 +4,14 @@
 
 This is my first Python project as I begin my journey into data engineering. I chose to work with stock market data because it provides great learning opportunities with:
 
-- Real-time data streaming
+- Near real-time data streaming
 - Data storage and management
 - Data quality monitoring
 - Visualization and analytics
 - Basic ETL processes
 
 Through this project, I've learned valuable skills:
-- Working with WebSocket for real-time data
+- Working with WebSocket for near real-time data
 - Setting up and managing a PostgreSQL database
 - Building interactive dashboards with Streamlit
 - Writing better Python code with type hints
@@ -19,7 +19,7 @@ Through this project, I've learned valuable skills:
 
 ## What It Does
 
-This is a real-time stock tracking application that:
+This is a near real-time stock tracking application that:
 1. Collects live stock prices from Finnhub.io
 2. Stores the data in PostgreSQL
 3. Visualizes it through an interactive dashboard
@@ -28,18 +28,18 @@ This is a real-time stock tracking application that:
 
 ![Stock Tracker Dashboard](https://i.imgur.com/JQZPrWu.png)
 
-*Note: This is a preview of the dashboard. You'll need your own Finnhub API key to collect real-time data.*
+*Note: This is a preview of the dashboard. You'll need your own Finnhub API key to collect near real-time data.*
 
 ## Features
 
 Here are the main components I've built:
 
--   **Real-time Data Collection:** Using Finnhub's WebSocket API to collect live stock prices. The `FinnhubWebSocket` class in `main.py` handles the connection and data processing. This was my first experience with WebSocket technology.
+-   **Near Real-time Data Collection:** Using Finnhub's WebSocket API to collect live stock prices. The `FinnhubWebSocket` class in `main.py` handles the connection and data processing. This was my first experience with WebSocket technology.
 
 -   **Data Storage:** All data is stored in a PostgreSQL database. The `PostgresManager` class in `src/database/postgres_manager.py` manages the database operations. I'm learning more about SQL and database management as I go.
 
 -   **Dashboard:** Built using Streamlit, featuring:
-    -   Real-time price charts with Plotly
+    -   Near real-time price charts with Plotly
     -   Key metrics (latest price, average price, volume)
     -   Interactive data tables
     -   Customizable time ranges
