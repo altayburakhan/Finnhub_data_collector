@@ -35,17 +35,20 @@ def db_url() -> str:
 
 @pytest.fixture(scope="session")
 def engine():
-    # Database connection settings for tests
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = int(os.getenv("DB_PORT", "5432"))
     DB_NAME = os.getenv("DB_NAME", "postgres")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
-    # SQLAlchemy engine URL
     DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     
-    return create_engine(DATABASE_URL)
+    engine = create_engine(DATABASE_URL)
+    
+    # Create tables before running tests
+    Base.metadata.create_all(engine)
+    
+    return engine
 
 
 @pytest.fixture(scope="session")
@@ -64,15 +67,19 @@ def tables(engine: Engine) -> Generator[None, None, None]:
     Base.metadata.drop_all(engine)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def db_session(engine):
     Session = sessionmaker(bind=engine)
-    return Session()
+    session = Session()
+    
+    yield session
+    
+    # Clean up after tests
+    session.close()
 
 
 @pytest.fixture(scope="function")
 def db_manager():
-    from src.database.postgres_manager import PostgresManager
     manager = PostgresManager()
     return manager
 
@@ -116,15 +123,10 @@ def multiple_stock_data() -> List[Dict]:
     ]
 
 
-@pytest.fixture(scope="function", autouse=True)
-def clean_db(db_session: Session) -> None:
-    """
-    Clean the test database before each test.
-
-    Args:
-        db_session: SQLAlchemy session object
-    """
+@pytest.fixture(autouse=True)
+def clean_db(db_session):
     try:
+        # Clean existing data
         db_session.execute(text("TRUNCATE TABLE stock_data RESTART IDENTITY CASCADE"))
         db_session.commit()
     except Exception as e:
