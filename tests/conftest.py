@@ -34,20 +34,18 @@ def db_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def engine(db_url: str) -> Engine:
-    """
-    Create test database engine.
+def engine():
+    # Database connection settings for tests
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", "5432"))
+    DB_NAME = os.getenv("DB_NAME", "postgres")
+    DB_USER = os.getenv("DB_USER", "postgres")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
-    Args:
-        db_url: Database connection URL
-
-    Returns:
-        Engine: SQLAlchemy engine object
-    """
-    return create_engine(
-        db_url,
-        poolclass=StaticPool,
-    )
+    # SQLAlchemy engine URL
+    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    
+    return create_engine(DATABASE_URL)
 
 
 @pytest.fixture(scope="session")
@@ -67,51 +65,15 @@ def tables(engine: Engine) -> Generator[None, None, None]:
 
 
 @pytest.fixture(scope="function")
-def db_session(engine: Engine, tables: None) -> Generator[Session, None, None]:
-    """
-    Create a database session for testing.
-
-    Args:
-        engine: SQLAlchemy engine object
-        tables: Test tables (fixture)
-
-    Yields:
-        Session: SQLAlchemy session object
-    """
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection)
-
-    try:
-        session.execute(text("TRUNCATE TABLE stock_data RESTART IDENTITY CASCADE"))
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise e
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+def db_session(engine):
+    Session = sessionmaker(bind=engine)
+    return Session()
 
 
 @pytest.fixture(scope="function")
-def db_manager(engine: Engine, tables: None) -> PostgresManager:
-    """
-    Create a PostgresManager instance for testing.
-
-    Args:
-        engine: SQLAlchemy engine object
-        tables: Test tables (fixture)
-
-    Returns:
-        PostgresManager: Database manager instance
-    """
+def db_manager():
+    from src.database.postgres_manager import PostgresManager
     manager = PostgresManager()
-    manager.engine = engine
-    manager._session_factory = sessionmaker(bind=engine)
-    manager.Session = manager._session_factory
     return manager
 
 
