@@ -7,13 +7,13 @@ management and data insertion.
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List, Any
 
 import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import Error as PostgresError
 from psycopg2.extensions import connection, cursor
-from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine
+from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -143,3 +143,24 @@ class PostgresManager:
                 self.conn.close()
         except PostgresError as e:
             logger.error(f"Error closing database connection: {e}")
+
+    def get_latest_records(self, limit: int = 10) -> List[Dict[str, Any]]:
+        session = self.Session()
+        try:
+            records = session.query(StockData)\
+                .order_by(StockData.timestamp.desc())\
+                .limit(limit)\
+                .all()
+            
+            return [
+                {
+                    "symbol": record.symbol,
+                    "price": record.price,
+                    "volume": record.volume,
+                    "timestamp": record.timestamp,
+                    "collected_at": record.collected_at
+                }
+                for record in records
+            ]
+        finally:
+            session.close()
