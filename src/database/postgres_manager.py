@@ -22,6 +22,10 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Type hint for stock data dictionary
+StockDataDict = Dict[str, Union[str, float, datetime]]
+
+# Using new SQLAlchemy 2.0 style
 Base = declarative_base()
 
 class StockData(Base):
