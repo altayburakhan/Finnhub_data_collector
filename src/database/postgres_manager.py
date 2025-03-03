@@ -13,11 +13,26 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import Error as PostgresError
 from psycopg2.extensions import connection, cursor
+from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 # Load environment variables
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+Base = declarative_base()
+
+class StockData(Base):
+    __tablename__ = 'stock_data'
+    
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String)
+    price = Column(Float)
+    volume = Column(Float)
+    timestamp = Column(DateTime)
+    collected_at = Column(DateTime)
 
 class PostgresManager:
     """Manages PostgreSQL database operations."""
