@@ -26,7 +26,8 @@ This is a near real-time stock tracking application that:
 
 ## Dashboard Preview
 
-![Stock Tracker Dashboard](https://imgur.com/a/dPvMOcO)
+![Stock Tracker Dashboard](![stock_data](https://github.com/user-attachments/assets/2953512d-f87c-4201-b491-1bcb8119bcd0)
+)
 
 *Note: This is a preview of the dashboard. You'll need your own Finnhub API key to collect near real-time data.*
 
