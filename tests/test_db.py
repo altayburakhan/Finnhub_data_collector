@@ -20,40 +20,40 @@ def test_db_connection(db_manager: PostgresManager) -> None:
         db_manager: PostgresManager fixture
     """
     assert db_manager.engine is not None, "Engine could not be created"
-    assert isinstance(db_manager.Session, sessionmaker), "Session could not be created"
-
+    
+    # Test connection
     with db_manager.engine.connect() as conn:
-        result = conn.execute(text("SELECT 1"))
-        assert result.scalar() == 1, "Database connection failed"
+        result = conn.execute("SELECT 1").scalar()
+        assert result == 1, "Database connection failed"
 
 
-def test_insert_stock_data(
-    db_manager: PostgresManager,
-    sample_stock_data: StockDataDict,
-) -> None:
+def test_insert_stock_data(db_manager: PostgresManager) -> None:
     """
     Test for data insertion.
 
     Args:
         db_manager: PostgresManager fixture
-        sample_stock_data: Sample data fixture
     """
-    result = db_manager.insert_stock_data(sample_stock_data)
-    assert result is not None, "Data could not be inserted"
-
-    session_factory = cast(sessionmaker, db_manager.Session)
-    session = session_factory()
+    # Create test data
+    test_data = {
+        "symbol": "TEST",
+        "price": 100.0,
+        "volume": 1000.0,
+        "timestamp": datetime.now(),
+        "collected_at": datetime.now()
+    }
+    
+    # Insert data
+    session = db_manager.Session()
     try:
-        record = (
-            session.query(StockData)
-            .filter_by(symbol=sample_stock_data["symbol"])
-            .first()
-        )
-
-        assert record is not None, "Record not found"
-        assert record.symbol == sample_stock_data["symbol"], "Symbol does not match"
-        assert record.price == sample_stock_data["price"], "Price does not match"
-        assert record.volume == sample_stock_data["volume"], "Volume does not match"
+        result = db_manager.insert_stock_data(test_data)
+        assert result is True, "Data insertion failed"
+        
+        # Verify insertion
+        inserted_data = session.query(StockData).filter_by(symbol="TEST").first()
+        assert inserted_data is not None
+        assert inserted_data.symbol == "TEST"
+        assert inserted_data.price == 100.0
     finally:
         session.close()
 

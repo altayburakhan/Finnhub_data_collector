@@ -41,16 +41,20 @@ class StockData(Base):
 class PostgresManager:
     """Manages PostgreSQL database operations."""
 
-    def __init__(self) -> None:
-        """Initialize database connection parameters."""
-        self.host: str = os.getenv("DB_HOST", "localhost")
-        self.port: str = os.getenv("DB_PORT", "5432")
-        self.dbname: str = os.getenv("DB_NAME", "postgres")
-        self.user: str = os.getenv("DB_USER", "postgres")
-        self.password: str = os.getenv("DB_PASSWORD", "")
-        self.conn: Optional[connection] = None
-        self.cur: Optional[cursor] = None
-        self.create_table()
+    def __init__(self):
+        self.host = os.getenv("DB_HOST", "localhost")
+        self.port = int(os.getenv("DB_PORT", "5432"))
+        self.db_name = os.getenv("DB_NAME", "postgres")
+        self.user = os.getenv("DB_USER", "postgres")
+        self.password = os.getenv("DB_PASSWORD", "postgres")
+
+        # Create SQLAlchemy engine and session
+        self.database_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
+        self.engine = create_engine(self.database_url)
+        self.Session = sessionmaker(bind=self.engine)
+
+        # Create tables
+        Base.metadata.create_all(self.engine)
 
     def connect(self) -> None:
         """Establish database connection."""
@@ -58,7 +62,7 @@ class PostgresManager:
             self.conn = psycopg2.connect(
                 host=self.host,
                 port=self.port,
-                dbname=self.dbname,
+                dbname=self.db_name,
                 user=self.user,
                 password=self.password
             )
