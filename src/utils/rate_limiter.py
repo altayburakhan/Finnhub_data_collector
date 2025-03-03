@@ -20,7 +20,13 @@ class RateLimiter:
         Args:
             max_requests: Maximum number of requests allowed in time window
             time_window: Time window in seconds
+
+        Raises:
+            ValueError: If max_requests or time_window is not positive
         """
+        if max_requests <= 0 or time_window <= 0:
+            raise ValueError("max_requests and time_window must be positive")
+
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests: Deque[float] = deque()

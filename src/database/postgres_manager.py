@@ -126,7 +126,12 @@ class PostgresManager:
             # Convert collected_at to datetime if it's a string
             if isinstance(data["collected_at"], str):
                 try:
-                    data["collected_at"] = datetime.strptime(data["collected_at"], "%Y-%m-%d %H:%M:%S")
+                    # First try ISO format
+                    try:
+                        data["collected_at"] = datetime.fromisoformat(data["collected_at"])
+                    except ValueError:
+                        # If ISO format fails, try the standard format
+                        data["collected_at"] = datetime.strptime(data["collected_at"], "%Y-%m-%d %H:%M:%S")
                     logger.debug(f"Converted collected_at: {data['collected_at']}")
                 except ValueError as e:
                     logger.error(f"❌ Collected_at conversion error for {data['symbol']}: {e}")
