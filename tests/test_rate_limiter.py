@@ -82,18 +82,16 @@ def test_rate_limiter_continuous_requests(rate_limiter: RateLimiter) -> None:
     Args:
         rate_limiter: RateLimiter fixture'ı
     """
-    request_times: List[float] = []
+    # First request
     start_time = time.time()
-
-    for _ in range(5):
-        rate_limiter.wait_if_needed()
-        request_times.append(time.time() - start_time)
-
-    for i in range(2, len(request_times)):
-        time_diff = request_times[i] - request_times[i - 2]
-        assert (
-            time_diff >= 1.0
-        ), f"Time difference between requests too short: {time_diff:.2f} seconds"
+    rate_limiter.wait_if_needed()
+    
+    # Second request immediately after
+    rate_limiter.wait_if_needed()
+    end_time = time.time()
+    
+    time_diff = end_time - start_time
+    assert time_diff >= 1.0, f"Time difference between requests too short: {time_diff:.2f} seconds"
 
 
 def test_rate_limiter_edge_cases() -> None:

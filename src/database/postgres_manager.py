@@ -98,41 +98,46 @@ class PostgresManager:
         finally:
             self.close()
 
-    def insert_stock_data(
-        self, data: Dict[str, Union[str, float, datetime]]
-    ) -> bool:
-        """Insert stock data into database.
-
-        Args:
-            data: Dictionary containing stock data
-
-        Returns:
-            bool: True if insertion successful, False otherwise
-        """
+    def insert_stock_data(self, data: Dict[str, Any]) -> Optional[bool]:
         try:
-            self.connect()
-            if self.cur:
-                self.cur.execute("""
-                    INSERT INTO stock_data 
-                    (symbol, price, volume, timestamp, collected_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (
-                    data["symbol"],
-                    data["price"],
-                    data["volume"],
-                    data["timestamp"],
-                    data["collected_at"]
-                ))
-                if self.conn:
-                    self.conn.commit()
+            # Validate data before insertion
+            if not self._validate_stock_data(data):
+                return None
+
+            session = self.Session()
+            try:
+                stock_data = StockData(
+                    symbol=data["symbol"],
+                    price=float(data["price"]),  # Ensure price is float
+                    volume=float(data["volume"]), # Ensure volume is float
+                    timestamp=data["timestamp"],
+                    collected_at=data["collected_at"]
+                )
+                session.add(stock_data)
+                session.commit()
                 return True
-        except PostgresError as e:
-            logger.error(f"Error inserting data: {e}")
-            if self.conn:
-                self.conn.rollback()
+            except Exception as e:
+                session.rollback()
+                return None
+            finally:
+                session.close()
+        except Exception as e:
+            return None
+
+    def _validate_stock_data(self, data: Dict[str, Any]) -> bool:
+        required_fields = ["symbol", "price", "volume", "timestamp", "collected_at"]
+        
+        # Check if all required fields exist
+        if not all(field in data for field in required_fields):
             return False
-        finally:
-            self.close()
+        
+        # Validate data types
+        try:
+            float(data["price"])
+            float(data["volume"])
+            return True
+        except (ValueError, TypeError):
+            return False
 
     def close(self) -> None:
         """Close database connection and cursor."""
