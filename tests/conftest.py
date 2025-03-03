@@ -78,10 +78,23 @@ def db_session(engine):
     session.close()
 
 
-@pytest.fixture(scope="function")
-def db_manager():
+@pytest.fixture(scope="session", autouse=True)
+def load_env() -> None:
+    """Load environment variables before running tests."""
+    load_dotenv()
+    # Test ortamı için varsayılan değerleri ayarla
+    os.environ.setdefault("POSTGRES_HOST", "localhost")
+    os.environ.setdefault("POSTGRES_PORT", "5432")
+    os.environ.setdefault("POSTGRES_DB", "postgres")
+    os.environ.setdefault("POSTGRES_USER", "postgres")
+    os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
+
+
+@pytest.fixture
+def db_manager() -> Generator[PostgresManager, None, None]:
+    """Create a database manager for testing."""
     manager = PostgresManager()
-    return manager
+    yield manager
 
 
 @pytest.fixture(scope="session")

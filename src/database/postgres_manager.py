@@ -42,16 +42,18 @@ class PostgresManager:
     """Manages PostgreSQL database operations."""
 
     def __init__(self):
+        """Initialize database connection."""
+        # Use POSTGRES_ prefixed environment variables
         self.host = os.getenv("POSTGRES_HOST", "localhost")
         self.port = int(os.getenv("POSTGRES_PORT", "5432"))
         self.db_name = os.getenv("POSTGRES_DB", "postgres")
         self.user = os.getenv("POSTGRES_USER", "postgres")
-        self.password = os.getenv("POSTGRES_PASSWORD", "nx5xax77z")
+        self.password = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-        # Create SQLAlchemy engine and session
         try:
+            # Create SQLAlchemy engine and session
             self.database_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
-            logger.info(f"Connecting to database with URL: {self.database_url}")
+            logger.info(f"Connecting to database at {self.host}:{self.port}")
             self.engine = create_engine(self.database_url)
             self.Session = sessionmaker(bind=self.engine)
 
