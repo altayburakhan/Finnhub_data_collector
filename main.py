@@ -30,15 +30,18 @@ PING_TIMEOUT: int = 5
 MAX_PING_RETRIES: int = 3
 BUFFER_SIZE: int = 100
 BUFFER_TIMEOUT: int = 5
+RATE_LIMIT_WAIT: int = 60  # 60 saniye bekle
 
 StockData = Dict[str, Any]  # Holds any stock related data
 TradeMessage = Dict[str, Any]  # Holds websocket messages
 
 logging.basicConfig(
     level=logging.INFO,
-    format=("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+    format=("%(asctime)s - %(levelname)s - %(message)s"),
 )
 logger = logging.getLogger(__name__)
+# Websocket debug loglarını kapatalım
+logging.getLogger('websocket').setLevel(logging.WARNING)
 
 # Load .env file
 load_dotenv()
@@ -121,23 +124,29 @@ class FinnhubWebSocket:
         self.last_connection_time = time.time()
         self.retry_count += 1
 
-        websocket.enableTrace(True)
-        self.ws = websocket.WebSocketApp(
-            f"wss://ws.finnhub.io?token={self.api_key}",
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close,
-            on_open=self.on_open,
-            on_ping=self.on_ping,
-            on_pong=self.on_pong,
-        )
+        try:
+            websocket.enableTrace(False)  # Debug mesajlarını kapatalım
+            self.ws = websocket.WebSocketApp(
+                f"wss://ws.finnhub.io?token={self.api_key}",
+                on_message=self.on_message,
+                on_error=self.on_error,
+                on_close=self.on_close,
+                on_open=self.on_open,
+                on_ping=self.on_ping,
+                on_pong=self.on_pong,
+            )
 
-        # Add connection parameters
-        self.ws.run_forever(
-            ping_interval=PING_INTERVAL,
-            ping_timeout=PING_TIMEOUT,
-            ping_payload="ping",
-        )
+            logger.info("Attempting to establish WebSocket connection...")
+            # Add connection parameters
+            self.ws.run_forever(
+                ping_interval=PING_INTERVAL,
+                ping_timeout=PING_TIMEOUT,
+                ping_payload="ping",
+            )
+        except Exception as e:
+            logger.error(f"Connection error: {str(e)}")
+            time.sleep(RECONNECT_DELAY)
+            self.connect()
 
     def should_process_message(self, symbol: str) -> bool:
         """Check if a message should be processed.
@@ -182,16 +191,23 @@ class FinnhubWebSocket:
                     break
 
             if trades_to_process:
+                logger.info(f"Attempting to process {len(trades_to_process)} trades from buffer")
+                success_count = 0
                 for trade in trades_to_process:
                     self.rate_limiter.wait_if_needed()
                     result = self.db_manager.insert_stock_data(trade)
                     if result:
+                        success_count += 1
                         logger.info(
-                            "Data saved from buffer: "
-                            f"{trade['symbol']} - ${float(trade['price']):.2f}"
+                            f"✓ Saved to DB: {trade['symbol']} - ${float(trade['price']):.2f} "
+                            f"(Volume: {trade['volume']}, Time: {trade['timestamp']})"
+                        )
+                    else:
+                        logger.error(
+                            f"✗ Failed to save: {trade['symbol']} - ${float(trade['price']):.2f}"
                         )
 
-                logger.info(f"Processed {len(trades_to_process)} trades from buffer")
+                logger.info(f"Successfully processed {success_count}/{len(trades_to_process)} trades")
                 self.last_buffer_process_time = time.time()
 
         except Exception as e:
@@ -203,6 +219,7 @@ class FinnhubWebSocket:
         Continuously check buffer status and call process_buffer
         when it's full or timeout is reached.
         """
+        logger.info("Buffer monitor started")
         while True:
             try:
                 now = time.time()
@@ -210,6 +227,7 @@ class FinnhubWebSocket:
                     now - self.last_buffer_process_time >= BUFFER_TIMEOUT
                     or self.buffer.qsize() >= BUFFER_SIZE
                 ):
+                    logger.info(f"Buffer size: {self.buffer.qsize()}")
                     self.process_buffer()
                 time.sleep(0.1)
             except Exception as e:
@@ -245,7 +263,7 @@ class FinnhubWebSocket:
                         "price": price,
                         "volume": volume,
                         "timestamp": timestamp,
-                        "collected_at": datetime.now().isoformat(),
+                        "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     }
 
                     try:
@@ -259,6 +277,9 @@ class FinnhubWebSocket:
 
                 if len(self.collected_symbols) == len(self.symbols):
                     logger.info("Collected data for all symbols in this cycle")
+                    # Force buffer processing when we have all symbols
+                    if self.buffer.qsize() > 0:
+                        self.process_buffer()
 
         except Exception as e:
             logger.error(f"Message processing error: {str(e)}")
@@ -271,10 +292,19 @@ class FinnhubWebSocket:
             error: Error message
         """
         if "429" in str(error):
-            logger.warning("Rate limit exceeded, waiting...")
-            time.sleep(RECONNECT_DELAY * 2)
+            logger.warning(f"Rate limit exceeded, waiting {RATE_LIMIT_WAIT} seconds...")
+            time.sleep(RATE_LIMIT_WAIT)
+            if self.ws:
+                self.ws.close()
+                self.ws = None
+            self.connect()
         else:
             logger.error(f"WebSocket error: {str(error)}")
+            if self.ws:
+                self.ws.close()
+                self.ws = None
+            time.sleep(RECONNECT_DELAY)
+            self.connect()
 
     def on_close(
         self,
@@ -293,9 +323,8 @@ class FinnhubWebSocket:
             f"WebSocket connection closed (code: {close_status_code}, msg: {close_msg})"
         )
         self.ws = None
+        time.sleep(RECONNECT_DELAY)
         self.connect()
-        if self.ws:
-            self.ws.run_forever(ping_interval=PING_INTERVAL, ping_timeout=PING_TIMEOUT)
 
     def on_open(self, ws: websocket.WebSocketApp) -> None:
         """Handle WebSocket connection opening.
@@ -310,8 +339,10 @@ class FinnhubWebSocket:
         self.last_pong_time = time.time()
         self.collected_symbols.clear()
 
+        # Subscribe to symbols with delay to avoid rate limit
         for symbol in self.symbols:
             self.rate_limiter.wait_if_needed()
+            time.sleep(0.5)  # Her istek arasında yarım saniye bekle
             ws.send(json.dumps({"type": "subscribe", "symbol": symbol}))
             logger.info(f"Subscription started for {symbol}")
 
@@ -370,36 +401,73 @@ class FinnhubWebSocket:
         Create connection health check and buffer monitor threads,
         then start WebSocket connection.
         """
-        health_check = threading.Thread(target=self.check_connection)
-        health_check.daemon = True
-        health_check.start()
-        buffer_monitor = threading.Thread(target=self.buffer_monitor)
-        buffer_monitor.daemon = True
-        buffer_monitor.start()
+        try:
+            logger.info("Starting Finnhub WebSocket client...")
+            
+            # Start health check thread
+            health_check = threading.Thread(target=self.check_connection)
+            health_check.daemon = True
+            health_check.start()
+            logger.info("Connection health check thread started")
 
-        while True:
-            try:
-                if self.ws:
-                    self.ws.run_forever(
-                        ping_interval=PING_INTERVAL,
-                        ping_timeout=PING_TIMEOUT,
-                        ping_payload="ping",
-                    )
-                else:
-                    self.connect()
-                time.sleep(1)
-            except Exception as e:
-                logger.error(f"WebSocket run error: {str(e)}")
-                time.sleep(1)
+            # Start buffer monitor thread
+            buffer_monitor = threading.Thread(target=self.buffer_monitor)
+            buffer_monitor.daemon = True
+            buffer_monitor.start()
+            logger.info("Buffer monitor thread started")
+
+            while True:
+                try:
+                    if self.ws:
+                        self.ws.run_forever(
+                            ping_interval=PING_INTERVAL,
+                            ping_timeout=PING_TIMEOUT,
+                            ping_payload="ping",
+                        )
+                    else:
+                        self.connect()
+                    time.sleep(1)
+                except Exception as e:
+                    logger.error(f"WebSocket run error: {str(e)}")
+                    time.sleep(RECONNECT_DELAY)
+                    continue
+
+        except Exception as e:
+            logger.error(f"Application error: {str(e)}")
+            raise
 
 
 def main() -> None:
-    """Start the main application.
-
-    Create WebSocket client and begin data collection.
-    """
-    ws_client = FinnhubWebSocket()
-    ws_client.run()
+    """Run the main application."""
+    try:
+        # Test database connection first
+        db_manager = PostgresManager()
+        db_manager.create_table()
+        logger.info("Database connection test successful!")
+        
+        # Initialize and run WebSocket client
+        finnhub_client = FinnhubWebSocket()
+        
+        # Start buffer monitor in a separate thread
+        buffer_monitor_thread = threading.Thread(
+            target=finnhub_client.buffer_monitor,
+            daemon=True
+        )
+        buffer_monitor_thread.start()
+        
+        # Start connection checker in a separate thread
+        connection_checker_thread = threading.Thread(
+            target=finnhub_client.check_connection,
+            daemon=True
+        )
+        connection_checker_thread.start()
+        
+        # Run the main WebSocket client
+        finnhub_client.run()
+        
+    except Exception as e:
+        logger.error(f"Application error: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":

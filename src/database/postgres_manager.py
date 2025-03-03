@@ -42,19 +42,25 @@ class PostgresManager:
     """Manages PostgreSQL database operations."""
 
     def __init__(self):
-        self.host = os.getenv("DB_HOST", "localhost")
-        self.port = int(os.getenv("DB_PORT", "5432"))
-        self.db_name = os.getenv("DB_NAME", "postgres")
-        self.user = os.getenv("DB_USER", "postgres")
-        self.password = os.getenv("DB_PASSWORD", "postgres")
+        self.host = os.getenv("POSTGRES_HOST", "localhost")
+        self.port = int(os.getenv("POSTGRES_PORT", "5432"))
+        self.db_name = os.getenv("POSTGRES_DB", "postgres")
+        self.user = os.getenv("POSTGRES_USER", "postgres")
+        self.password = os.getenv("POSTGRES_PASSWORD", "nx5xax77z")
 
         # Create SQLAlchemy engine and session
-        self.database_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
-        self.engine = create_engine(self.database_url)
-        self.Session = sessionmaker(bind=self.engine)
+        try:
+            self.database_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
+            logger.info(f"Connecting to database with URL: {self.database_url}")
+            self.engine = create_engine(self.database_url)
+            self.Session = sessionmaker(bind=self.engine)
 
-        # Create tables
-        Base.metadata.create_all(self.engine)
+            # Create tables
+            Base.metadata.create_all(self.engine)
+            logger.info("Database initialization successful")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+            raise
 
     def connect(self) -> None:
         """Establish database connection."""
@@ -102,41 +108,77 @@ class PostgresManager:
         try:
             # Validate data before insertion
             if not self._validate_stock_data(data):
+                logger.error(f"❌ Data validation failed. Missing or invalid fields in: {data}")
                 return None
+
+            # Convert timestamp string to datetime if it's a string
+            if isinstance(data["timestamp"], str):
+                try:
+                    data["timestamp"] = datetime.strptime(data["timestamp"], "%Y-%m-%d %H:%M:%S")
+                    logger.debug(f"Converted timestamp: {data['timestamp']}")
+                except ValueError as e:
+                    logger.error(f"❌ Timestamp conversion error for {data['symbol']}: {e}")
+                    logger.error(f"Problematic timestamp: {data['timestamp']}")
+                    return None
+
+            # Convert collected_at to datetime if it's a string
+            if isinstance(data["collected_at"], str):
+                try:
+                    data["collected_at"] = datetime.strptime(data["collected_at"], "%Y-%m-%d %H:%M:%S")
+                    logger.debug(f"Converted collected_at: {data['collected_at']}")
+                except ValueError as e:
+                    logger.error(f"❌ Collected_at conversion error for {data['symbol']}: {e}")
+                    logger.error(f"Problematic collected_at: {data['collected_at']}")
+                    return None
 
             session = self.Session()
             try:
                 stock_data = StockData(
-                    symbol=data["symbol"],
-                    price=float(data["price"]),  # Ensure price is float
-                    volume=float(data["volume"]), # Ensure volume is float
+                    symbol=str(data["symbol"]),
+                    price=float(data["price"]),
+                    volume=float(data["volume"]),
                     timestamp=data["timestamp"],
                     collected_at=data["collected_at"]
                 )
                 session.add(stock_data)
                 session.commit()
+                logger.info(f"✅ Successfully inserted {data['symbol']} data into database")
                 return True
             except Exception as e:
                 session.rollback()
+                logger.error(f"❌ Database insertion error for {data['symbol']}: {e}")
                 return None
             finally:
                 session.close()
         except Exception as e:
+            logger.error(f"❌ General error in insert_stock_data: {e}")
+            logger.error(f"Problematic data: {data}")
             return None
 
     def _validate_stock_data(self, data: Dict[str, Any]) -> bool:
+        """Validate stock data before insertion.
+
+        Args:
+            data: Stock data to validate
+
+        Returns:
+            bool: Whether the data is valid
+        """
         required_fields = ["symbol", "price", "volume", "timestamp", "collected_at"]
         
         # Check if all required fields exist
         if not all(field in data for field in required_fields):
+            logger.error(f"Missing fields in data: {data}")
             return False
         
         # Validate data types
         try:
             float(data["price"])
             float(data["volume"])
+            str(data["symbol"])
             return True
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data type validation error: {e}")
             return False
 
     def close(self) -> None:
