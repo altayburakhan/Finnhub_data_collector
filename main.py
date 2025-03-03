@@ -12,7 +12,7 @@ import threading
 import time
 from datetime import datetime
 from queue import Empty, Queue
-from typing import Dict, List, Optional, Set, Union, cast
+from typing import Dict, List, Optional, Set, Union, cast, Any
 
 import websocket
 from dotenv import load_dotenv
@@ -31,9 +31,8 @@ MAX_PING_RETRIES: int = 3
 BUFFER_SIZE: int = 100
 BUFFER_TIMEOUT: int = 5
 
-TradeData = Dict[str, Union[str, float, int]]
-WebSocketMessage = Dict[str, Union[str, List[TradeData]]]
-StockDataDict = Dict[str, Union[str, float, datetime]]
+StockData = Dict[str, Any]  # Holds any stock related data
+TradeMessage = Dict[str, Any]  # Holds websocket messages
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,21 +58,21 @@ class FinnhubWebSocket:
         Initialize API key, stock symbols to track, and helper tools
         like buffer and rate limiter.
         """
-        self.api_key: Optional[str] = os.getenv("FINNHUB_API_KEY")
+        self.api_key: str = os.getenv("FINNHUB_API_KEY", "")
         if not self.api_key:
             raise ValueError("FINNHUB_API_KEY not found!")
 
         self.symbols: List[str] = [
             "AAPL",
             "MSFT",
-            "AMZN",
             "GOOGL",
+            "AMZN",
             "META",
             "TSLA",
             "NVDA",
             "AMD",
             "INTC",
-            "NFLX",
+            "NFLX"
         ]
         self.db_manager: PostgresManager = PostgresManager()
         self.ws: Optional[websocket.WebSocketApp] = None
@@ -225,7 +224,7 @@ class FinnhubWebSocket:
             message: Incoming message
         """
         try:
-            data: WebSocketMessage = json.loads(message)
+            data: TradeMessage = json.loads(message)
             if data["type"] == "trade":
                 trades = cast(List[Dict[str, Union[str, float, int]]], data["data"])
                 for trade in trades:
@@ -241,7 +240,7 @@ class FinnhubWebSocket:
                         "%Y-%m-%d %H:%M:%S"
                     )
 
-                    stock_data: StockDataDict = {
+                    stock_data: StockData = {
                         "symbol": symbol,
                         "price": price,
                         "volume": volume,

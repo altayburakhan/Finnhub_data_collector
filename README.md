@@ -192,3 +192,14 @@ Areas I plan to work on:
 - Optimize data storage
 
 Feedback and suggestions are welcome as I continue to learn and improve this project.
+
+## Near Real-Time Data Collection
+
+### Collection Speed
+- Data is collected approximately every 3 seconds for each stock
+- Data is saved to database with maximum 5 seconds delay
+- Collected data includes:
+  - Stock price
+  - Trading volume
+  - Timestamp
+
