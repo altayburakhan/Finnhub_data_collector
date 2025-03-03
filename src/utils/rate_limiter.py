@@ -20,19 +20,16 @@ class RateLimiter:
             max_requests: Maximum number of requests allowed
             time_window: Time window in seconds
         """
+        if max_requests <= 0 or time_window <= 0:
+            raise ValueError("max_requests and time_window must be positive")
+            
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests: List[float] = []
-        self.last_request_time = 0.0
 
     def wait_if_needed(self) -> None:
         """Check and wait if rate limit would be exceeded."""
         current_time = time.time()
-        
-        # Enforce minimum time between requests
-        time_since_last_request = current_time - self.last_request_time
-        if time_since_last_request < 1.0:  # Minimum 1 second between requests
-            time.sleep(1.0 - time_since_last_request)
         
         # Clean old requests
         self.requests = [req for req in self.requests 
@@ -49,4 +46,3 @@ class RateLimiter:
         
         # Add current request
         self.requests.append(time.time())
-        self.last_request_time = time.time()
