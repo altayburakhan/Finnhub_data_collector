@@ -17,25 +17,25 @@ jobs:
       postgres:
         image: postgres:13
         env:
+          POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Nx5xax77z
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
         # Sağlık kontrolü için timeout ve retry ayarları
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 2s
-          --health-retries 3
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v2
       with:
         fetch-depth: 1  # Shallow clone for hızlı checkout
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'  # pip cache'i etkinleştir
@@ -66,6 +66,12 @@ jobs:
         echo "POSTGRES_PORT=5432" >> .env
 
     - name: Run tests
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: postgres
+        DB_USER: postgres
+        DB_PASSWORD: postgres
       run: |
         poetry run pytest -v
       env:
