@@ -2,7 +2,7 @@
 
 ## Personal Note
 
-This is my first Python project as I begin my journey into data engineering. I chose to work with stock market data because it provides great learning opportunities with:
+This is my first Data Engineeing project as I begin my journey into data engineering. I chose to work with stock market data because it provides great learning opportunities with:
 
 - Near real-time data streaming
 - Data storage and management
